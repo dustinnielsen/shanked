@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
@@ -44,15 +45,20 @@ const PROP_TEMPLATES = [
   (p) => `${p} celebrates a bogey like it's a birdie`,
 ];
 
-function buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, hasPhoto) {
+function buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, hasPhoto, courseInfo) {
+  const par = courseInfo?.pars?.[hole - 1];
+  const courseLine = courseInfo?.name ? `Course: ${courseInfo.name}` : "";
+  const parLine = par ? `Hole ${hole} par: ${par}` : "";
   return `You are a savage golf roast machine at a casual golf trip with friends. Roast the worst performer.
 
 Intensity: ${intensity.label} (hole ${hole}/18 — ${hole <= 6 ? "light and funny" : hole <= 12 ? "personal and sharp" : "full savage, no mercy"})
 Player: ${worstPlayer}
 Traits/weaknesses: ${worstProfile?.traits || "none"}
 Scores: ${playerScores}
+${courseLine}${parLine ? ` · ${parLine}` : ""}
 ${worstShot ? `Worst shot: ${worstShot}` : ""}
 ${hasPhoto ? "Photo attached — reference specific visual details." : ""}
+${par ? `Reference the par when relevant (e.g. if they scored way over par, roast them for it specifically).` : ""}
 
 ONE roast, 3-5 sentences. Funny, specific, escalating. Reference other scores to twist the knife. No intro. Ruthless but not mean-spirited.`;
 }
@@ -299,7 +305,7 @@ function SetupScreen({ onStart }) {
 // ════════════════════════════════════════════════════════════════════════════
 // HOLE SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false }) {
+function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo }) {
   const [holeScores, setHoleScores] = useState(players.reduce((a, p) => ({ ...a, [p.name]: "" }), {}));
   const [worstShot, setWorstShot] = useState("");
   const [worstPlayer, setWorstPlayer] = useState(players[0].name);
@@ -393,7 +399,7 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
 // ════════════════════════════════════════════════════════════════════════════
 // ROAST SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound }) {
+function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound, courseInfo }) {
   const [roast, setRoast] = useState("");
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
@@ -410,22 +416,23 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
       role: "user",
       content: photo
         ? [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: photo } },
-           { type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, true) }]
-        : [{ type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, false) }]
+           { type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, true, courseInfo) }]
+        : [{ type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, false, courseInfo) }]
     }];
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages }),
       });
       const data = await res.json();
+      if (data.error) throw new Error(data.error);
       const text = data.content?.find(b => b.type === "text")?.text || "The AI couldn't do worse than that shot.";
       setRoast(text);
       onSaveRoast(hole, worstPlayer, text);
-    } catch {
-      const fallback = "The AI is weeping. That shot was too sad to roast.";
+    } catch (err) {
+      const fallback = `API Error: ${err.message || "Unknown error"}`;
       setRoast(fallback);
-      onSaveRoast(hole, worstPlayer, fallback);
+      onSaveRoast(hole, worstPlayer, "The AI is weeping. That shot was too sad to roast.");
     }
     setLoading(false);
     setTimeout(() => setRevealed(true), 100);
@@ -574,7 +581,7 @@ function PropBetsScreen({ players, onDone }) {
 Make each bet about a specific player doing something hilarious or embarrassing. Format as JSON array: [{"bet": "...", "player": "PlayerName"}]. Only JSON, no other text.`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
@@ -654,7 +661,7 @@ Traits: ${worstProfile?.traits || "none"}
 ${situation ? `Situation: ${situation}` : ""}
 2-3 sentences max. No intro. Pure roast energy. Go.`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
@@ -782,7 +789,7 @@ Write a Post-Round Roast Report:
 Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
@@ -947,7 +954,7 @@ Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`
 // ════════════════════════════════════════════════════════════════════════════
 export default function App() {
   // Check for spectator mode
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const spectateId = urlParams.get("spectate");
   const joinCode = urlParams.get("join");
   if (spectateId) return <SpectatorView sessionId={spectateId} />;
@@ -966,14 +973,17 @@ export default function App() {
   const [roastLog, setRoastLog] = useState([]);
   const [trophyRooms, setTrophyRooms] = useState([]);
   const [showTrashTalk, setShowTrashTalk] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [courseInfo, setCourseInfo] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [spectatorLink, setSpectatorLink] = useState("");
   const [showSpectatorModal, setShowSpectatorModal] = useState(false);
   const [propBets, setPropBets] = useState([]);
   const [roomId, setRoomId] = useState(null);
   const [isMultiplayer, setIsMultiplayer] = useState(false);
-  // Multiplayer: poll room for nominations when host is on hole screen
   const [pendingNominations, setPendingNominations] = useState([]);
+  const myName = players[0]?.name || "Host";
 
   // Poll room nominations in multiplayer mode
   useEffect(() => {
@@ -991,19 +1001,17 @@ export default function App() {
     setPlayers(p); setTripName(name); setTotalRounds(rounds); setBetAmount(bet);
     setCurrentRound(1); setHole(1); setAllScores([]); setRoundScores([]); setRoastLog([]);
     setIsMultiplayer(mode === "multi");
-
-    if (mode === "multi") {
-      setScreen("mp_lobby");
-      return;
-    }
-    // Solo mode — create spectator session
+    if (mode === "multi") { setScreen("mp_lobby"); return; }
     const sid = genId();
     setSessionId(sid);
     const link = `${window.location.origin}${window.location.pathname}?spectate=${sid}`;
     setSpectatorLink(link);
     await createSession(sid, name, p);
-    setScreen("props");
+    setScreen("course");
   };
+
+  const handleCourseDone = (info) => { setCourseInfo(info); setScreen("props"); };
+  const handleCourseSkip = () => { setCourseInfo(null); setScreen("props"); };
 
   const handleRoomReady = async (rid) => {
     setRoomId(rid);
@@ -1013,7 +1021,7 @@ export default function App() {
     setScreen("props");
   };
 
-  const handlePropsDone = (props, results) => { setPropBets({ props, results }); setScreen("hole"); };
+  const handlePropsDone = (bets, winners) => { setPropBets({ bets, winners }); setScreen("hole"); };
 
   const handleHoleSubmit = (scores, worstPlayer, worstShot, photo, photoPreview) => {
     setCurrentHoleData({ scores, worstPlayer, worstShot, photo, photoPreview });
@@ -1080,29 +1088,43 @@ export default function App() {
   const handleRestart = () => {
     setScreen("setup"); setHole(1); setCurrentRound(1);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
-    setSessionId(null); setSpectatorLink("");
+    setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
   };
 
   const isLastHole = hole === 18;
   const isLastRound = currentRound === totalRounds;
+  const activeSession = sessionId || roomId;
+  const showFABs = ["hole","roast","roundsummary"].includes(screen);
 
   return (
     <div className="app">
       <style>{CSS}</style>
 
       {/* Spectator link banner */}
-      {spectatorLink && screen !== "setup" && screen !== "final" && screen !== "mp_lobby" && (
+      {spectatorLink && screen !== "setup" && screen !== "final" && screen !== "mp_lobby" && screen !== "course" && (
         <div className="spec-banner" onClick={() => setShowSpectatorModal(true)}>
           {isMultiplayer ? `👥 ROOM ${roomId} · Tap to share join link` : "🔴 SHANKED · LIVE · Tap to share spectator link"}
         </div>
       )}
 
-      {/* Trash talk floating button */}
-      {(screen === "hole" || screen === "roast") && (
-        <button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button>
+      {/* Floating Action Buttons */}
+      {showFABs && (
+        <>
+          <button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button>
+          {activeSession && <button className="chat-fab" onClick={() => setShowChat(true)}>💬</button>}
+          <button className="stats-fab" onClick={() => setShowStats(true)}>📊</button>
+        </>
       )}
 
+      {/* Modals */}
       {showTrashTalk && <TrashTalkModal players={players} onClose={() => setShowTrashTalk(false)} />}
+      {showChat && activeSession && (
+        <GroupChatModal sessionId={activeSession} myName={myName} onClose={() => setShowChat(false)} />
+      )}
+      {showStats && (
+        <StatsPanel players={players} allScores={allScores} roastLog={roastLog}
+          courseInfo={courseInfo} onClose={() => setShowStats(false)} />
+      )}
 
       {showSpectatorModal && (
         <div className="modal-overlay" onClick={() => setShowSpectatorModal(false)}>
@@ -1124,21 +1146,22 @@ export default function App() {
       )}
 
       {screen === "setup" && <SetupScreen onStart={handleStart} />}
+      {screen === "course" && <CourseSetupScreen onDone={handleCourseDone} onSkip={handleCourseSkip} />}
       {screen === "mp_lobby" && (
         <MultiplayerLobby tripName={tripName} players={players} totalRounds={totalRounds}
           betAmount={betAmount} onRoomReady={handleRoomReady} />
       )}
-      {screen === "props" && <PropBetsScreen players={players} onDone={handlePropsDone} />}
+      {screen === "props" && <PropBetsScreenV2 players={players} onDone={handlePropsDone} />}
       {screen === "hole" && (
         <HoleScreen players={players} hole={hole} round={currentRound} totalRounds={totalRounds}
-          betAmount={betAmount} onSubmit={handleHoleSubmit}
+          betAmount={betAmount} onSubmit={handleHoleSubmit} courseInfo={courseInfo}
           pendingNominations={isMultiplayer ? pendingNominations : []} roomId={roomId} isMultiplayer={isMultiplayer} />
       )}
       {screen === "roast" && currentHoleData && (
         <RoastScreen players={players} hole={hole} round={currentRound}
           holeScores={currentHoleData.scores} worstPlayer={currentHoleData.worstPlayer}
           worstShot={currentHoleData.worstShot} photo={currentHoleData.photo}
-          photoPreview={currentHoleData.photoPreview}
+          photoPreview={currentHoleData.photoPreview} courseInfo={courseInfo}
           onNext={handleNext} onEndRound={handleEndRound} onFinal={handleFinal}
           onSaveRoast={handleSaveRoast}
           isLastHole={isLastHole} isLastRound={isLastRound} />
@@ -1150,6 +1173,7 @@ export default function App() {
       {screen === "final" && (
         <FinalScreen players={players} allScores={allScores} roastLog={roastLog}
           tripName={tripName} totalRounds={totalRounds} betAmount={betAmount}
+          courseInfo={courseInfo} propBets={propBets}
           trophyRooms={trophyRooms} onSaveToTrophy={handleSaveToTrophy} onRestart={handleRestart} />
       )}
     </div>
@@ -1206,7 +1230,7 @@ function MultiplayerLobby({ tripName, players, totalRounds, betAmount, onRoomRea
     return () => clearInterval(interval);
   }, [roomId]);
 
-  const joinLink = `${window.location.origin}${window.location.pathname}?join=${roomId}`;
+  const joinLink = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?join=${roomId}` : "";
 
   const shareCode = async () => {
     try {
@@ -1466,6 +1490,393 @@ function MultiplayerPlayerView({ roomId, playerName, myIndex }) {
           })}
         </div>
         <p className="spec-refresh-note">Auto-refreshes every 4 seconds</p>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHAT HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+const CHAT_EMOJIS = ["😂","🔥","💀","👏","😬","🤣","⛳","🏌️"];
+
+async function sendChatMessage(sessionId, sender, message) {
+  return supaFetch("/chat_messages", "POST", { session_id: sessionId, sender, message, reactions: {} });
+}
+
+async function getChatMessages(sessionId) {
+  const rows = await supaFetch(`/chat_messages?session_id=eq.${sessionId}&order=created_at.asc&limit=100`);
+  return rows || [];
+}
+
+async function addReaction(msgId, emoji) {
+  // Get current reactions first
+  const rows = await supaFetch(`/chat_messages?id=eq.${msgId}&limit=1`);
+  if (!rows?.[0]) return;
+  const reactions = rows[0].reactions || {};
+  reactions[emoji] = (reactions[emoji] || 0) + 1;
+  return supaFetch(`/chat_messages?id=eq.${msgId}`, "PATCH", { reactions });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GROUP CHAT MODAL
+// ════════════════════════════════════════════════════════════════════════════
+function GroupChatModal({ sessionId, myName, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef();
+
+  const poll = useCallback(async () => {
+    const msgs = await getChatMessages(sessionId);
+    setMessages(msgs);
+  }, [sessionId]);
+
+  useEffect(() => {
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, [poll]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || sending) return;
+    setSending(true);
+    await sendChatMessage(sessionId, myName, input.trim());
+    setInput("");
+    await poll();
+    setSending(false);
+  };
+
+  const handleReaction = async (msgId, emoji) => {
+    await addReaction(msgId, emoji);
+    await poll();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal chat-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">💬 GROUP CHAT</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="chat-messages">
+          {messages.length === 0 && <p className="chat-empty">No messages yet. Say something.</p>}
+          {messages.map((msg) => {
+            const isMe = msg.sender === myName;
+            return (
+              <div key={msg.id} className={`chat-msg ${isMe ? "mine" : "theirs"}`}>
+                {!isMe && <div className="chat-sender">{msg.sender}</div>}
+                <div className={`chat-bubble ${isMe ? "bubble-mine" : "bubble-theirs"}`}>
+                  {msg.message}
+                </div>
+                <div className="chat-reactions-row">
+                  {Object.entries(msg.reactions || {}).map(([emoji, count]) => (
+                    count > 0 && (
+                      <button key={emoji} className="reaction-pill" onClick={() => handleReaction(msg.id, emoji)}>
+                        {emoji} {count}
+                      </button>
+                    )
+                  ))}
+                  <div className="reaction-adder">
+                    {CHAT_EMOJIS.map(e => (
+                      <button key={e} className="reaction-add-btn" onClick={() => handleReaction(msg.id, e)}>{e}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="chat-input-row">
+          <input className="chat-input" placeholder="Message the group..." value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSend()} />
+          <button className="chat-send-btn" onClick={handleSend} disabled={sending || !input.trim()}>
+            {sending ? "..." : "↑"}
+          </button>
+        </div>
+        <p className="chat-note">Auto-refreshes every 3 seconds</p>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COURSE SETUP SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+function CourseSetupScreen({ onDone, onSkip }) {
+  const [courseName, setCourseName] = useState("");
+  const [pars, setPars] = useState(Array(18).fill(4));
+  const [loading, setLoading] = useState(false);
+
+  const updatePar = (hole, val) => {
+    const p = [...pars];
+    p[hole] = parseInt(val) || 4;
+    setPars(p);
+  };
+
+  const autoFill = async () => {
+    if (!courseName.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 300,
+          messages: [{ role: "user", content: `What are the pars for each of the 18 holes at ${courseName}? Return ONLY a JSON array of 18 integers like [4,3,5,...]. No other text.` }]
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "";
+      const match = text.match(/\[[\d,\s]+\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        if (parsed.length === 18) setPars(parsed);
+      }
+    } catch {}
+    setLoading(false);
+  };
+
+  const totalPar = pars.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="screen course-screen">
+      <div className="course-header">
+        <h2 className="course-title">⛳ COURSE SETUP</h2>
+        <p className="course-sub">Enter course details for smarter roasts and +/- par scoring</p>
+      </div>
+
+      <div className="course-name-row">
+        <input className="input-name" placeholder="Course name (e.g. Pebble Beach)" value={courseName}
+          onChange={e => setCourseName(e.target.value)} style={{ marginBottom: "10px" }} />
+        <button className={`btn-secondary ${!courseName.trim() || loading ? "disabled" : ""}`}
+          onClick={autoFill} disabled={!courseName.trim() || loading}>
+          {loading ? "Looking up..." : "🔍 Auto-fill Pars"}
+        </button>
+      </div>
+
+      <div className="par-grid">
+        <div className="par-grid-header">
+          <h3 className="section-label">Par Per Hole</h3>
+          <span className="total-par">Total Par: {totalPar}</span>
+        </div>
+        <div className="par-holes">
+          {pars.map((par, i) => (
+            <div key={i} className="par-hole">
+              <span className="par-hole-num">{i + 1}</span>
+              <div className="par-btns">
+                {[3, 4, 5].map(n => (
+                  <button key={n} className={`par-btn ${par === n ? "active" : ""}`}
+                    onClick={() => updatePar(i, n)}>{n}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button className="btn-primary" style={{ marginTop: "16px" }}
+        onClick={() => onDone({ name: courseName, pars, totalPar })}>
+        SET COURSE →
+      </button>
+      <button className="btn-secondary" style={{ marginTop: "8px" }} onClick={onSkip}>
+        Skip — No Course Info
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// IMPROVED PROP BETS SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+function PropBetsScreenV2({ players, onDone }) {
+  const [bets, setBets] = useState([]);
+  const [customBet, setCustomBet] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const [winners, setWinners] = useState({});
+
+  const generateAI = async () => {
+    setGenerating(true);
+    const names = players.map(p => p.name).join(", ");
+    const traits = players.map(p => `${p.name}: ${p.traits || "unknown"}`).join("; ");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514", max_tokens: 400,
+          messages: [{ role: "user", content: `Generate 5 funny prop bets for a casual golf round. Players: ${names}. Traits: ${traits}. Make them specific to the players. Return ONLY a JSON array of strings like ["bet1","bet2",...]. No other text.` }]
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "[]";
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        setBets(prev => [...prev, ...parsed.map(b => ({ text: b, custom: false }))]);
+      }
+    } catch {}
+    setGenerating(false);
+    setGenerated(true);
+  };
+
+  const addCustom = () => {
+    if (!customBet.trim()) return;
+    setBets(prev => [...prev, { text: customBet.trim(), custom: true }]);
+    setCustomBet("");
+  };
+
+  const removeBet = (i) => setBets(prev => prev.filter((_, idx) => idx !== i));
+
+  const setWinner = (betIdx, player) => {
+    setWinners(prev => ({ ...prev, [betIdx]: prev[betIdx] === player ? null : player }));
+  };
+
+  return (
+    <div className="screen prop-screen">
+      <div className="prop-header">
+        <h2 className="prop-title">🎯 PROP BETS</h2>
+        <p className="prop-sub">Set your bets before the round. Track who wins each one.</p>
+      </div>
+
+      {/* AI Generate */}
+      <button className="btn-secondary" onClick={generateAI} disabled={generating} style={{ marginBottom: "12px" }}>
+        {generating ? "Generating..." : "🤖 Generate AI Bets"}
+      </button>
+
+      {/* Custom bet input */}
+      <div className="custom-bet-row">
+        <input className="input-name" placeholder='Add your own (e.g. "First to say a swear word")'
+          value={customBet} onChange={e => setCustomBet(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && addCustom()} />
+        <button className="btn-add-bet" onClick={addCustom} disabled={!customBet.trim()}>+ Add</button>
+      </div>
+
+      {/* Bets list */}
+      {bets.length > 0 && (
+        <div className="bets-list">
+          {bets.map((bet, i) => (
+            <div key={i} className="bet-card-v2">
+              <div className="bet-top">
+                <p className="bet-text-v2">{bet.text}</p>
+                <button className="bet-remove" onClick={() => removeBet(i)}>✕</button>
+              </div>
+              <div className="bet-winners">
+                <span className="bet-winner-label">Winner:</span>
+                <div className="bet-winner-btns">
+                  <button className={`bet-winner-btn ${winners[i] === "TBD" ? "active-tbd" : ""}`}
+                    onClick={() => setWinner(i, "TBD")}>TBD</button>
+                  {players.map(p => (
+                    <button key={p.name} className={`bet-winner-btn ${winners[i] === p.name ? "active-won" : ""}`}
+                      onClick={() => setWinner(i, p.name)}>{p.name}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {bets.length === 0 && generated && (
+        <p style={{ color: "#555", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>
+          No bets generated. Add your own above.
+        </p>
+      )}
+
+      <button className="btn-primary" style={{ marginTop: "16px" }}
+        onClick={() => onDone(bets, winners)}>
+        {bets.length > 0 ? `LOCK IN ${bets.length} BET${bets.length > 1 ? "S" : ""} →` : "SKIP BETS →"}
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LIVE STATS PANEL
+// ════════════════════════════════════════════════════════════════════════════
+function StatsPanel({ players, allScores, roastLog, courseInfo, onClose }) {
+  const totals = players.map(p => {
+    const scores = allScores.map(h => parseInt(h.scores?.[p.name]) || 0);
+    const total = scores.reduce((a, b) => a + b, 0);
+    const holesPlayed = scores.filter(s => s > 0).length;
+    const pars = courseInfo?.pars || Array(18).fill(4);
+    const parTotal = pars.slice(0, holesPlayed).reduce((a, b) => a + b, 0);
+    const vspar = total - parTotal;
+    const roastCount = roastLog.filter(r => r.player === p.name).length;
+    const best = scores.filter(s => s > 0).reduce((a, b) => Math.min(a, b), 99);
+    const worst = scores.filter(s => s > 0).reduce((a, b) => Math.max(a, b), 0);
+    return { name: p.name, total, holesPlayed, vspar, roastCount, best, worst };
+  }).sort((a, b) => a.total - b.total);
+
+  const mostRoasted = [...totals].sort((a, b) => b.roastCount - a.roastCount)[0];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal stats-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">📊 LIVE STATS</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {courseInfo?.name && (
+          <div className="stats-course-badge">
+            ⛳ {courseInfo.name} · Par {courseInfo.totalPar}
+          </div>
+        )}
+
+        <div className="stats-grid">
+          {totals.map((p, i) => (
+            <div key={p.name} className={`stats-card ${i === 0 ? "stats-leading" : ""}`}>
+              <div className="stats-card-header">
+                <span className="stats-rank">{i === 0 ? "🏅" : i === totals.length - 1 ? "💀" : `#${i + 1}`}</span>
+                <span className="stats-name">{p.name}</span>
+                <span className="stats-total">{p.total || "—"}</span>
+              </div>
+              {p.holesPlayed > 0 && (
+                <div className="stats-details">
+                  {courseInfo?.pars && (
+                    <div className="stats-detail">
+                      <span>vs Par</span>
+                      <span className={p.vspar > 0 ? "stat-over" : p.vspar < 0 ? "stat-under" : "stat-even"}>
+                        {p.vspar > 0 ? `+${p.vspar}` : p.vspar === 0 ? "E" : p.vspar}
+                      </span>
+                    </div>
+                  )}
+                  <div className="stats-detail"><span>Best Hole</span><span>{p.best === 99 ? "—" : p.best}</span></div>
+                  <div className="stats-detail"><span>Worst Hole</span><span>{p.worst || "—"}</span></div>
+                  <div className="stats-detail"><span>Roasted</span><span>🔥 {p.roastCount}x</span></div>
+                  <div className="stats-detail"><span>Holes</span><span>{p.holesPlayed}/18</span></div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {mostRoasted && mostRoasted.roastCount > 0 && (
+          <div className="stats-award">
+            ☠️ <strong>{mostRoasted.name}</strong> is getting destroyed — roasted {mostRoasted.roastCount}x so far
+          </div>
+        )}
+
+        {roastLog.length > 0 && (
+          <div className="stats-recent">
+            <h4 className="section-label" style={{ marginBottom: "8px" }}>Recent Roasts</h4>
+            {roastLog.slice(-3).reverse().map((r, i) => (
+              <div key={i} className="stats-roast-row">
+                <span className="stats-roast-hole">H{r.hole}</span>
+                <span className="stats-roast-player">{r.player}</span>
+                <span className="stats-roast-text">"{r.roast.slice(0, 60)}..."</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1741,4 +2152,93 @@ const CSS = `
 .nom-from { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:6px; }
 .nom-player { font-size:14px; font-weight:700; }
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
+
+/* Group Chat */
+.chat-modal { height:85vh; display:flex; flex-direction:column; }
+.chat-messages { flex:1; overflow-y:auto; padding:8px 0; display:flex; flex-direction:column; gap:12px; }
+.chat-empty { text-align:center; color:#555; font-size:13px; padding:40px 0; }
+.chat-msg { display:flex; flex-direction:column; max-width:85%; }
+.chat-msg.mine { align-self:flex-end; align-items:flex-end; }
+.chat-msg.theirs { align-self:flex-start; align-items:flex-start; }
+.chat-sender { font-size:11px; color:#555; margin-bottom:4px; letter-spacing:0.5px; }
+.chat-bubble { padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5; }
+.bubble-mine { background:#16a34a; color:#fff; border-radius:12px 12px 4px 12px; }
+.bubble-theirs { background:#1a1a1a; color:#e0dcd4; border-radius:12px 12px 12px 4px; }
+.chat-reactions-row { display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:4px; }
+.reaction-pill { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:20px; padding:2px 8px; font-size:12px; cursor:pointer; transition:background 0.15s; }
+.reaction-pill:hover { background:#222; }
+.reaction-adder { display:flex; gap:2px; opacity:0; transition:opacity 0.2s; }
+.chat-msg:hover .reaction-adder { opacity:1; }
+.reaction-add-btn { background:none; border:none; font-size:14px; cursor:pointer; padding:2px; opacity:0.6; transition:opacity 0.15s; }
+.reaction-add-btn:hover { opacity:1; }
+.chat-input-row { display:flex; gap:8px; padding-top:12px; border-top:1px solid #1a1a1a; margin-top:8px; }
+.chat-input { flex:1; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; color:#f0ece4; font-family:'DM Sans',sans-serif; font-size:14px; padding:10px 12px; outline:none; }
+.chat-input:focus { border-color:#16a34a; }
+.chat-send-btn { width:42px; height:42px; background:#16a34a; border:none; border-radius:8px; color:#fff; font-size:18px; cursor:pointer; transition:opacity 0.2s; }
+.chat-send-btn:disabled { opacity:0.3; }
+.chat-note { text-align:center; font-size:11px; color:#333; margin-top:6px; }
+.chat-fab { position:fixed; bottom:84px; right:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.chat-fab:active { transform:scale(0.92); }
+.chat-unread { position:absolute; top:-2px; right:-2px; width:16px; height:16px; background:#f59e0b; border-radius:50%; font-size:10px; color:#000; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+/* Course Setup */
+.course-screen { padding-top:28px; }
+.course-header { text-align:center; margin-bottom:24px; }
+.course-title { font-family:'Bebas Neue',sans-serif; font-size:36px; letter-spacing:2px; }
+.course-sub { font-size:13px; color:#666; margin-top:6px; }
+.course-name-row { margin-bottom:20px; }
+.par-grid { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:16px; }
+.par-grid-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.total-par { font-family:'Bebas Neue',sans-serif; font-size:20px; color:#16a34a; }
+.par-holes { display:flex; flex-direction:column; gap:8px; }
+.par-hole { display:flex; align-items:center; gap:12px; padding:6px 0; border-bottom:1px solid #1a1a1a; }
+.par-hole:last-child { border-bottom:none; }
+.par-hole-num { font-family:'Bebas Neue',sans-serif; font-size:18px; color:#555; min-width:24px; }
+.par-btns { display:flex; gap:6px; }
+.par-btn { width:40px; height:34px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:6px; color:#888; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+.par-btn.active { background:#16a34a; border-color:#16a34a; color:#fff; }
+
+/* Prop Bets V2 */
+.custom-bet-row { display:flex; gap:8px; margin-bottom:16px; }
+.btn-add-bet { padding:10px 16px; background:#16a34a; border:none; border-radius:6px; color:#fff; font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:1px; cursor:pointer; white-space:nowrap; transition:opacity 0.2s; }
+.btn-add-bet:disabled { opacity:0.3; cursor:not-allowed; }
+.bets-list { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+.bet-card-v2 { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:14px; }
+.bet-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.bet-text-v2 { font-size:14px; color:#e0dcd4; line-height:1.5; flex:1; }
+.bet-remove { background:none; border:none; color:#444; font-size:14px; cursor:pointer; padding:2px; transition:color 0.2s; flex-shrink:0; }
+.bet-remove:hover { color:#16a34a; }
+.bet-winners { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bet-winner-label { font-size:11px; color:#555; letter-spacing:1px; text-transform:uppercase; }
+.bet-winner-btns { display:flex; gap:6px; flex-wrap:wrap; }
+.bet-winner-btn { padding:5px 10px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:6px; color:#888; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+.bet-winner-btn.active-won { background:#14532d; border-color:#16a34a; color:#4ade80; }
+.bet-winner-btn.active-tbd { background:#1a1a0a; border-color:#f59e0b; color:#f59e0b; }
+
+/* Stats */
+.stats-modal { max-height:85vh; overflow-y:auto; }
+.stats-course-badge { background:#0a1a0a; border:1px solid #14532d; border-radius:6px; padding:8px 12px; font-size:13px; color:#16a34a; margin-bottom:16px; text-align:center; }
+.stats-grid { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.stats-card { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:14px; }
+.stats-card.stats-leading { border-color:#16a34a; background:#0a1a0a; }
+.stats-card-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.stats-rank { font-size:18px; min-width:24px; }
+.stats-name { flex:1; font-size:15px; font-weight:600; }
+.stats-total { font-family:'Bebas Neue',sans-serif; font-size:28px; color:#888; }
+.stats-details { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.stats-detail { display:flex; justify-content:space-between; font-size:12px; color:#666; background:#161616; padding:5px 8px; border-radius:4px; }
+.stats-detail span:last-child { font-weight:600; color:#aaa; }
+.stat-over { color:#f87171 !important; }
+.stat-under { color:#4ade80 !important; }
+.stat-even { color:#f59e0b !important; }
+.stats-award { background:#1a0a0a; border:1px solid #3a1a1a; border-radius:8px; padding:12px; font-size:13px; color:#888; margin-bottom:16px; text-align:center; }
+.stats-award strong { color:#f0ece4; }
+.stats-recent { background:#111; border:1px solid #1e1e1e; border-radius:8px; padding:12px; }
+.stats-roast-row { display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid #1a1a1a; }
+.stats-roast-row:last-child { border-bottom:none; }
+.stats-roast-hole { font-family:'Bebas Neue',sans-serif; font-size:14px; color:#16a34a; min-width:28px; }
+.stats-roast-player { font-size:12px; font-weight:600; color:#888; min-width:60px; }
+.stats-roast-text { font-size:12px; color:#555; font-style:italic; line-height:1.4; }
+.stats-fab { position:fixed; bottom:144px; right:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.stats-fab:active { transform:scale(0.92); }
 `;
