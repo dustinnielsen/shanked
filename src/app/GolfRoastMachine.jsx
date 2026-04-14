@@ -1,3 +1,4 @@
+"use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
@@ -1741,3 +1742,4 @@ const CSS = `
 .nom-player { font-size:14px; font-weight:700; }
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
 `;
+
