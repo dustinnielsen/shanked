@@ -1,8 +1,18 @@
-// Optional API proxy route - currently the app calls Anthropic directly
-// This can be used in future to keep API calls server-side
 export async function POST(request) {
-  return new Response(JSON.stringify({ message: 'Use direct Anthropic API calls' }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  try {
+    const body = await request.json();
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    return Response.json(data);
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
 }
