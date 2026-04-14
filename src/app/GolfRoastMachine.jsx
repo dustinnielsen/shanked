@@ -423,8 +423,8 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
       const text = data.content?.find(b => b.type === "text")?.text || "The AI couldn't do worse than that shot.";
       setRoast(text);
       onSaveRoast(hole, worstPlayer, text);
-    } catch {
-      const fallback = "The AI is weeping. That shot was too sad to roast.";
+    } catch (err) {
+      const fallback = `API Error: ${err.message}`;
       setRoast(fallback);
       onSaveRoast(hole, worstPlayer, fallback);
     }
