@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ── Supabase config ──────────────────────────────────────────────────────────
@@ -415,7 +414,7 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
         : [{ type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, false) }]
     }];
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages }),
       });
@@ -423,8 +422,8 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
       const text = data.content?.find(b => b.type === "text")?.text || "The AI couldn't do worse than that shot.";
       setRoast(text);
       onSaveRoast(hole, worstPlayer, text);
-    } catch (err) {
-      const fallback = `API Error: ${err.message}`;
+    } catch {
+      const fallback = "The AI is weeping. That shot was too sad to roast.";
       setRoast(fallback);
       onSaveRoast(hole, worstPlayer, fallback);
     }
@@ -575,7 +574,7 @@ function PropBetsScreen({ players, onDone }) {
 Make each bet about a specific player doing something hilarious or embarrassing. Format as JSON array: [{"bet": "...", "player": "PlayerName"}]. Only JSON, no other text.`;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
@@ -655,7 +654,7 @@ Traits: ${worstProfile?.traits || "none"}
 ${situation ? `Situation: ${situation}` : ""}
 2-3 sentences max. No intro. Pure roast energy. Go.`;
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
@@ -783,7 +782,7 @@ Write a Post-Round Roast Report:
 Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
