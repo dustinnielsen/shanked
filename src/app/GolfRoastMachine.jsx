@@ -2376,8 +2376,8 @@ const CSS = `
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
 
 /* Back button */
-.back-btn { position:absolute; top:24px; left:20px; background:none; border:none; color:#555; font-size:14px; font-weight:600; cursor:pointer; padding:6px 10px; border-radius:6px; transition:color 0.2s, background 0.2s; display:flex; align-items:center; gap:6px; z-index:50; }
-.back-btn:hover { color:#f0ece4; background:#1a1a1a; }
+.back-btn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:#555; font-size:13px; font-weight:600; cursor:pointer; padding:6px 10px 6px 0; border-radius:6px; transition:color 0.2s; margin-bottom:8px; }
+.back-btn:hover { color:#f0ece4; }
 .screen-with-back { position:relative; }
 
 /* Open to multiplayer */
