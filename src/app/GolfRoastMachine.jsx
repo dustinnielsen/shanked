@@ -18,6 +18,44 @@ async function supaFetch(path, method = "GET", body = null) {
   return text ? JSON.parse(text) : null;
 }
 
+// ── Game Session Persistence ─────────────────────────────────────────────────
+const SESSION_KEY = "shanked_session_id";
+
+function saveSessionId(id) {
+  try { localStorage.setItem(SESSION_KEY, id); } catch {}
+}
+
+function loadSessionId() {
+  try { return localStorage.getItem(SESSION_KEY); } catch { return null; }
+}
+
+function clearSessionId() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+}
+
+async function createGameSession(state) {
+  const { sessionId, tripName, players, totalRounds, betAmount, currentRound, hole,
+          allScores, roundScores, roastLog, courseInfo, propBets, isMultiplayer, roomId } = state;
+  return supaFetch("/game_sessions", "POST", {
+    id: sessionId, trip_name: tripName, players, total_rounds: totalRounds,
+    bet_amount: betAmount, current_round: currentRound, current_hole: hole,
+    all_scores: allScores, round_scores: roundScores, roast_log: roastLog,
+    course_info: courseInfo, prop_bets: propBets,
+    is_multiplayer: isMultiplayer, room_id: roomId, is_active: true,
+  });
+}
+
+async function updateGameSession(sessionId, patch) {
+  return supaFetch(`/game_sessions?id=eq.${sessionId}`, "PATCH", {
+    ...patch, updated_at: new Date().toISOString()
+  });
+}
+
+async function loadGameSession(sessionId) {
+  const rows = await supaFetch(`/game_sessions?id=eq.${sessionId}&limit=1`);
+  return rows?.[0] || null;
+}
+
 function genId() { return Math.random().toString(36).slice(2, 9).toUpperCase(); }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -960,7 +998,8 @@ export default function App() {
   if (spectateId) return <SpectatorView sessionId={spectateId} />;
   if (joinCode) return <JoinScreen prefillCode={joinCode} />;
 
-  const [screen, setScreen] = useState("setup");
+  const [screen, setScreen] = useState("loading");
+  const [resumeSession, setResumeSession] = useState(null);
   const [players, setPlayers] = useState([]);
   const [tripName, setTripName] = useState("");
   const [totalRounds, setTotalRounds] = useState(1);
@@ -985,6 +1024,38 @@ export default function App() {
   const [pendingNominations, setPendingNominations] = useState([]);
   const myName = players[0]?.name || "Host";
 
+  // ── Check for resumable session on mount ──
+  useEffect(() => {
+    const check = async () => {
+      const savedId = loadSessionId();
+      if (savedId) {
+        const session = await loadGameSession(savedId);
+        if (session && session.is_active && session.current_hole <= 18) {
+          setResumeSession(session);
+          setScreen("resume");
+          return;
+        }
+      }
+      setScreen("setup");
+    };
+    check();
+  }, []);
+
+  // ── Auto-save state after every hole ──
+  const saveState = useCallback(async (patch = {}) => {
+    if (!sessionId) return;
+    await updateGameSession(sessionId, {
+      current_hole: hole,
+      current_round: currentRound,
+      all_scores: allScores,
+      round_scores: roundScores,
+      roast_log: roastLog,
+      course_info: courseInfo,
+      prop_bets: propBets,
+      ...patch,
+    });
+  }, [sessionId, hole, currentRound, allScores, roundScores, roastLog, courseInfo, propBets]);
+
   // Poll room nominations in multiplayer mode
   useEffect(() => {
     if (!isMultiplayer || !roomId || screen !== "hole") return;
@@ -1004,10 +1075,31 @@ export default function App() {
     if (mode === "multi") { setScreen("mp_lobby"); return; }
     const sid = genId();
     setSessionId(sid);
+    saveSessionId(sid);
     const link = `${window.location.origin}${window.location.pathname}?spectate=${sid}`;
     setSpectatorLink(link);
     await createSession(sid, name, p);
+    await createGameSession({ sessionId: sid, tripName: name, players: p, totalRounds: rounds,
+      betAmount: bet, currentRound: 1, hole: 1, allScores: [], roundScores: [], roastLog: [],
+      courseInfo: null, propBets: null, isMultiplayer: false, roomId: null });
     setScreen("course");
+  };
+
+  const handleResume = (session) => {
+    setPlayers(session.players || []);
+    setTripName(session.trip_name || "");
+    setTotalRounds(session.total_rounds || 1);
+    setBetAmount(session.bet_amount || 0);
+    setCurrentRound(session.current_round || 1);
+    setHole(session.current_hole || 1);
+    setAllScores(session.all_scores || []);
+    setRoundScores(session.round_scores || []);
+    setRoastLog(session.roast_log || []);
+    setCourseInfo(session.course_info || null);
+    setPropBets(session.prop_bets || null);
+    setSessionId(session.id);
+    setResumeSession(null);
+    setScreen("hole");
   };
 
   const handleCourseDone = (info) => { setCourseInfo(info); setScreen("props"); };
@@ -1037,6 +1129,7 @@ export default function App() {
         current_hole: holeNum, current_round: currentRound,
         roast_log: newLog, latest_roast: entry, all_scores: allScores,
       });
+      await updateGameSession(sessionId, { roast_log: newLog, current_hole: holeNum });
     }
     if (isMultiplayer && roomId) {
       await updateRoom(roomId, {
@@ -1054,7 +1147,10 @@ export default function App() {
     setRoundScores(newRoundScores);
     setHole(hole + 1);
     setScreen("hole");
-    if (sessionId) updateSession(sessionId, { all_scores: newScores, current_hole: hole + 1 });
+    if (sessionId) {
+      updateSession(sessionId, { all_scores: newScores, current_hole: hole + 1 });
+      updateGameSession(sessionId, { all_scores: newScores, round_scores: newRoundScores, current_hole: hole + 1 });
+    }
   };
 
   const handleEndRound = () => {
@@ -1062,6 +1158,7 @@ export default function App() {
     const newRoundScores = [...roundScores, { hole, scores: currentHoleData.scores }];
     setAllScores(newScores);
     setRoundScores(newRoundScores);
+    if (sessionId) updateGameSession(sessionId, { all_scores: newScores, round_scores: newRoundScores });
     setScreen("roundsummary");
   };
 
@@ -1069,14 +1166,19 @@ export default function App() {
     setCurrentRound(currentRound + 1);
     setHole(1);
     setRoundScores([]);
-    setScreen("props");
+    if (sessionId) updateGameSession(sessionId, { current_round: currentRound + 1, current_hole: 1, round_scores: [] });
+    setScreen("course");
   };
 
   const handleFinal = () => {
     const newScores = [...allScores, { hole, round: currentRound, scores: currentHoleData.scores }];
     setAllScores(newScores);
     setScreen("final");
-    if (sessionId) updateSession(sessionId, { all_scores: newScores, is_active: false });
+    if (sessionId) {
+      updateSession(sessionId, { all_scores: newScores, is_active: false });
+      updateGameSession(sessionId, { all_scores: newScores, is_active: false });
+    }
+    clearSessionId();
   };
 
   const handleSaveToTrophy = (name, totalsArr, log) => {
@@ -1086,9 +1188,11 @@ export default function App() {
   };
 
   const handleRestart = () => {
+    clearSessionId();
     setScreen("setup"); setHole(1); setCurrentRound(1);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
+    setResumeSession(null);
   };
 
   const isLastHole = hole === 18;
@@ -1145,6 +1249,15 @@ export default function App() {
         </div>
       )}
 
+      {screen === "loading" && (
+        <div className="spec-loading">
+          <div className="loading-dots"><span style={{background:"#16a34a"}}/><span style={{background:"#16a34a"}}/><span style={{background:"#16a34a"}}/></div>
+          <p style={{color:"#555",fontSize:"13px",marginTop:"12px"}}>Loading...</p>
+        </div>
+      )}
+      {screen === "resume" && resumeSession && (
+        <ResumeScreen session={resumeSession} onResume={() => handleResume(resumeSession)} onNew={handleRestart} />
+      )}
       {screen === "setup" && <SetupScreen onStart={handleStart} />}
       {screen === "course" && <CourseSetupScreen onDone={handleCourseDone} onSkip={handleCourseSkip} />}
       {screen === "mp_lobby" && (
@@ -1882,6 +1995,55 @@ function StatsPanel({ players, allScores, roastLog, courseInfo, onClose }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// RESUME SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+function ResumeScreen({ session, onResume, onNew }) {
+  const intensity = getIntensity(session.current_hole || 1);
+  return (
+    <div className="screen resume-screen">
+      <div className="resume-header">
+        <div className="resume-icon">⛳</div>
+        <h2 className="resume-title">ROUND IN PROGRESS</h2>
+        <p className="resume-sub">You've got an active round. Pick up where you left off?</p>
+      </div>
+      <div className="resume-card">
+        <div className="resume-trip">{session.trip_name}</div>
+        <div className="resume-details">
+          <div className="resume-detail">
+            <span>Round</span>
+            <span>{session.current_round} of {session.total_rounds}</span>
+          </div>
+          <div className="resume-detail">
+            <span>Hole</span>
+            <span style={{ color: intensity.color }}>{intensity.emoji} {session.current_hole}</span>
+          </div>
+          {session.course_info?.name && (
+            <div className="resume-detail">
+              <span>Course</span>
+              <span>{session.course_info.name}</span>
+            </div>
+          )}
+          <div className="resume-detail">
+            <span>Players</span>
+            <span>{session.players?.map(p => p.name).join(", ")}</span>
+          </div>
+          <div className="resume-detail">
+            <span>Roasts fired</span>
+            <span>🔥 {session.roast_log?.length || 0}</span>
+          </div>
+        </div>
+      </div>
+      <button className="btn-primary" onClick={onResume} style={{ background: intensity.color }}>
+        ↩ RESUME ROUND
+      </button>
+      <button className="btn-secondary" style={{ marginTop: "10px" }} onClick={onNew}>
+        Start New Trip
+      </button>
+    </div>
+  );
+}
+
 // ── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=Russo+One&display=swap');
@@ -2152,6 +2314,20 @@ const CSS = `
 .nom-from { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:6px; }
 .nom-player { font-size:14px; font-weight:700; }
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
+
+/* Resume Screen */
+.resume-screen { padding-top:60px; display:flex; flex-direction:column; align-items:center; }
+.resume-header { text-align:center; margin-bottom:28px; }
+.resume-icon { font-size:52px; margin-bottom:12px; }
+.resume-title { font-family:'Bebas Neue',sans-serif; font-size:36px; letter-spacing:2px; }
+.resume-sub { font-size:13px; color:#666; margin-top:8px; max-width:280px; line-height:1.5; }
+.resume-card { width:100%; background:#111; border:1px solid #1e1e1e; border-radius:12px; padding:20px; margin-bottom:24px; }
+.resume-trip { font-family:'Bebas Neue',sans-serif; font-size:28px; letter-spacing:1px; color:#16a34a; margin-bottom:16px; text-align:center; }
+.resume-details { display:flex; flex-direction:column; gap:10px; }
+.resume-detail { display:flex; justify-content:space-between; align-items:center; font-size:14px; padding:8px 0; border-bottom:1px solid #1a1a1a; }
+.resume-detail:last-child { border-bottom:none; }
+.resume-detail span:first-child { color:#555; }
+.resume-detail span:last-child { font-weight:600; color:#ccc; font-size:13px; text-align:right; max-width:60%; }
 
 /* Group Chat */
 .chat-modal { height:85vh; display:flex; flex-direction:column; }
