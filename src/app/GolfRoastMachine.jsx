@@ -232,6 +232,7 @@ function SpectatorView({ sessionId }) {
 function SetupScreen({ onStart }) {
   const [tripName, setTripName] = useState("");
   const [numRounds, setNumRounds] = useState(1);
+  const [totalHoles, setTotalHoles] = useState(18);
   const [players, setPlayers] = useState([{ name: "", traits: "" }, { name: "", traits: "" }]);
   const [betAmount, setBetAmount] = useState("");
 
@@ -282,6 +283,15 @@ function SetupScreen({ onStart }) {
         <input className="input-name" placeholder="Trip name (e.g. Vegas 2026 🎰)" value={tripName} onChange={e => setTripName(e.target.value)} />
         <div className="meta-row">
           <div className="meta-field">
+            <label className="meta-label">Holes</label>
+            <div className="round-btns">
+              {[9,18].map(n => (
+                <button key={n} className={`round-btn ${numRounds === n ? "active" : ""}`} onClick={() => { if ([9,18].includes(n)) setTotalHoles(n); else setNumRounds(n); }}>{n}</button>
+              ))}
+            </div>
+          </div>
+          </div>
+          <div className="meta-field">
             <label className="meta-label">Rounds</label>
             <div className="round-btns">
               {[1,2,3].map(n => (
@@ -324,13 +334,13 @@ function SetupScreen({ onStart }) {
         </p>
         {players.length < 6 && <button className="btn-secondary" onClick={addPlayer}>+ Add Player</button>}
         <button className={`btn-primary ${!canStart ? "disabled" : ""}`}
-          onClick={() => canStart && onStart(players, tripName, numRounds, parseFloat(betAmount) || 0, mode)}>
+          onClick={() => canStart && onStart(players, tripName, numRounds, parseFloat(betAmount) || 0, mode, totalHoles)}>
           {mode === "multi" ? "CREATE ROOM →" : "START THE CARNAGE"}
         </button>
       </div>
 
       <div className="intensity-preview">
-        <p className="preview-label">Roast escalation across 18 holes:</p>
+        <p className="preview-label">Roast escalation — holes get nastier as you go:</p>
         <div className="intensity-bar">
           {ROAST_INTENSITY.map((r, i) => <div key={i} className="intensity-segment" style={{ background: r.color }} />)}
         </div>
@@ -1003,6 +1013,7 @@ export default function App() {
   const [players, setPlayers] = useState([]);
   const [tripName, setTripName] = useState("");
   const [totalRounds, setTotalRounds] = useState(1);
+  const [totalHoles, setTotalHoles] = useState(18);
   const [betAmount, setBetAmount] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   const [hole, setHole] = useState(1);
@@ -1068,8 +1079,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isMultiplayer, roomId, screen]);
 
-  const handleStart = async (p, name, rounds, bet, mode) => {
-    setPlayers(p); setTripName(name); setTotalRounds(rounds); setBetAmount(bet);
+  const handleStart = async (p, name, rounds, bet, mode, holes = 18) => {
+    setPlayers(p); setTripName(name); setTotalRounds(rounds); setBetAmount(bet); setTotalHoles(holes);
     setCurrentRound(1); setHole(1); setAllScores([]); setRoundScores([]); setRoastLog([]);
     setIsMultiplayer(mode === "multi");
     if (mode === "multi") { setScreen("mp_lobby"); return; }
@@ -1081,7 +1092,7 @@ export default function App() {
     await createSession(sid, name, p);
     await createGameSession({ sessionId: sid, tripName: name, players: p, totalRounds: rounds,
       betAmount: bet, currentRound: 1, hole: 1, allScores: [], roundScores: [], roastLog: [],
-      courseInfo: null, propBets: null, isMultiplayer: false, roomId: null });
+      courseInfo: null, propBets: null, isMultiplayer: false, roomId: null, total_holes: holes });
     setScreen("course");
   };
 
@@ -1097,6 +1108,7 @@ export default function App() {
     setRoastLog(session.roast_log || []);
     setCourseInfo(session.course_info || null);
     setPropBets(session.prop_bets || null);
+    setTotalHoles(session.total_holes || 18);
     setSessionId(session.id);
     setResumeSession(null);
     setScreen("hole");
@@ -1195,7 +1207,7 @@ export default function App() {
     setResumeSession(null);
   };
 
-  const isLastHole = hole === 18;
+  const isLastHole = hole === totalHoles;
   const isLastRound = currentRound === totalRounds;
   const activeSession = sessionId || roomId;
   const showFABs = ["hole","roast","roundsummary"].includes(screen);
@@ -1727,6 +1739,7 @@ function GroupChatModal({ sessionId, myName, onClose }) {
 function CourseSetupScreen({ onDone, onSkip }) {
   const [courseName, setCourseName] = useState("");
   const [pars, setPars] = useState(Array(18).fill(4));
+  const [numHoles, setNumHoles] = useState(18);
   const [loading, setLoading] = useState(false);
 
   const updatePar = (hole, val) => {
@@ -1965,7 +1978,7 @@ function StatsPanel({ players, allScores, roastLog, courseInfo, onClose }) {
                   <div className="stats-detail"><span>Best Hole</span><span>{p.best === 99 ? "—" : p.best}</span></div>
                   <div className="stats-detail"><span>Worst Hole</span><span>{p.worst || "—"}</span></div>
                   <div className="stats-detail"><span>Roasted</span><span>🔥 {p.roastCount}x</span></div>
-                  <div className="stats-detail"><span>Holes</span><span>{p.holesPlayed}/18</span></div>
+                  <div className="stats-detail"><span>Holes</span><span>{p.holesPlayed}/{totalHoles || 18}</span></div>
                 </div>
               )}
             </div>
