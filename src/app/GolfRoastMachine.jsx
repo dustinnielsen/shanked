@@ -372,7 +372,7 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
 
   return (
     <div className="screen hole-screen screen-with-back">
-      {onBack && hole > 1 && <button className="back-btn" onClick={onBack}>← Back</button>}
+      {onBack && <button className="back-btn" onClick={onBack}>← {hole === 1 ? "Setup" : "Back"}</button>}
       <div className="hole-header" style={{ borderColor: intensity.color }}>
         <div>
           <div className="hole-badge" style={{ background: intensity.color }}>HOLE {hole}</div>
@@ -1322,7 +1322,7 @@ export default function App() {
         <HoleScreen players={players} hole={hole} round={currentRound} totalRounds={totalRounds}
           betAmount={betAmount} onSubmit={handleHoleSubmit} courseInfo={courseInfo}
           pendingNominations={isMultiplayer ? pendingNominations : []} roomId={roomId} isMultiplayer={isMultiplayer}
-          onBack={hole > 1 ? () => setScreen("roast") : () => setScreen("props")}
+          onBack={hole > 1 ? () => { setHole(hole - 1); setScreen("roast"); } : () => setScreen("props")}
           onOpenMultiplayer={!isMultiplayer ? handleOpenMultiplayer : null}
           liveRoomId={liveRoomId} />
       )}
