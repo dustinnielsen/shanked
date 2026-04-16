@@ -286,7 +286,7 @@ function SetupScreen({ onStart }) {
             <label className="meta-label">Holes</label>
             <div className="round-btns">
               {[9,18].map(n => (
-                <button key={n} className={`round-btn ${numRounds === n ? "active" : ""}`} onClick={() => { if ([9,18].includes(n)) setTotalHoles(n); else setNumRounds(n); }}>{n}</button>
+                <button key={n} className={`round-btn ${totalHoles === n ? "active" : ""}`} onClick={() => setTotalHoles(n)}>{n}</button>
               ))}
             </div>
           </div>
