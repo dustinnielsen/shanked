@@ -1286,16 +1286,38 @@ export default function App() {
         </div>
       )}
 
-      {/* Floating Action Buttons */}
+      {/* Bottom Navigation Bar */}
       {showFABs && (
-        <>
-          <div className="fab-wrap fab-wrap-right" style={{bottom:"24px"}}><button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button><span className="fab-label">Roast</span></div>
-          {activeSession && <div className="fab-wrap fab-wrap-right" style={{bottom:"84px"}}><button className="chat-fab" onClick={() => setShowChat(true)}>💬</button><span className="fab-label">Chat</span></div>}
-          <div className="fab-wrap fab-wrap-right" style={{bottom:"144px"}}><button className="stats-fab" onClick={() => setShowStats(true)}>📊</button><span className="fab-label">Stats</span></div>
-          <div className="fab-wrap fab-wrap-left" style={{bottom:"24px"}}><button className="scorecard-fab" onClick={() => setShowScorecard(true)}>📋</button><span className="fab-label">Scorecard</span></div>
-          {betAmount > 0 && <div className="fab-wrap fab-wrap-left" style={{bottom:"84px"}}><button className="skins-fab" onClick={() => setShowSkins(true)}>💰</button><span className="fab-label">Skins</span></div>}
-          <div className="fab-wrap fab-wrap-left" style={{bottom:"144px"}}><button className="challenges-fab" onClick={() => setShowChallenges(true)}>🎯</button><span className="fab-label">Challenges</span></div>
-        </>
+        <div className="bottom-nav">
+          <button className="bottom-nav-btn" onClick={() => setShowScorecard(true)}>
+            <span className="bottom-nav-icon">📋</span>
+            <span className="bottom-nav-label">Scorecard</span>
+          </button>
+          <button className="bottom-nav-btn" onClick={() => setShowStats(true)}>
+            <span className="bottom-nav-icon">📊</span>
+            <span className="bottom-nav-label">Stats</span>
+          </button>
+          {betAmount > 0 && (
+            <button className="bottom-nav-btn" onClick={() => setShowSkins(true)}>
+              <span className="bottom-nav-icon">💰</span>
+              <span className="bottom-nav-label">Skins</span>
+            </button>
+          )}
+          <button className="bottom-nav-btn" onClick={() => setShowChallenges(true)}>
+            <span className="bottom-nav-icon">🎯</span>
+            <span className="bottom-nav-label">Challenges</span>
+          </button>
+          {activeSession && (
+            <button className="bottom-nav-btn" onClick={() => setShowChat(true)}>
+              <span className="bottom-nav-icon">💬</span>
+              <span className="bottom-nav-label">Chat</span>
+            </button>
+          )}
+          <button className="bottom-nav-btn" onClick={() => setShowTrashTalk(true)}>
+            <span className="bottom-nav-icon">🔥</span>
+            <span className="bottom-nav-label">Roast</span>
+          </button>
+        </div>
       )}
 
       {/* Modals */}
@@ -1402,7 +1424,12 @@ export default function App() {
           onBack={() => setScreen("roast")} />
       )}
       {showHistoryBtn && (
-        <div className="fab-wrap fab-wrap-left" style={{bottom:"24px"}}><button className="history-fab" onClick={() => setShowHistory(true)}>🏆</button><span className="fab-label">History</span></div>
+        <div className="bottom-nav">
+          <button className="bottom-nav-btn" onClick={() => setShowHistory(true)}>
+            <span className="bottom-nav-icon">🏆</span>
+            <span className="bottom-nav-label">Trip History</span>
+          </button>
+        </div>
       )}
       {screen === "final" && (
         <FinalScreen players={players} allScores={allScores} roastLog={roastLog}
@@ -2600,8 +2627,6 @@ const CSS = `
 .bottom-nav-btn:active { background:#222; transform:scale(0.95); }
 .bottom-nav-icon { font-size:22px; line-height:1; }
 .bottom-nav-label { font-size:9px; font-weight:600; color:#555; letter-spacing:0.3px; text-transform:uppercase; white-space:nowrap; }
-.trash-talk-fab { position:relative; bottom:auto; right:auto; width:52px; height:52px; border-radius:50%; background:#16a34a; border:none; font-size:22px; cursor:pointer; z-index:100; box-shadow:0 4px 20px rgba(22,163,74,0.4); transition:transform 0.15s; }
-.trash-talk-fab:active { transform:scale(0.92); }
 
 /* Setup */
 .setup-header { text-align:center; margin-bottom:28px; padding-top:24px; }
