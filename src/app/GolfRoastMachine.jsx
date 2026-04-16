@@ -1289,12 +1289,12 @@ export default function App() {
       {/* Floating Action Buttons */}
       {showFABs && (
         <>
-          <button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button>
-          {activeSession && <button className="chat-fab" onClick={() => setShowChat(true)}>💬</button>}
-          <button className="stats-fab" onClick={() => setShowStats(true)}>📊</button>
-          <button className="scorecard-fab" onClick={() => setShowScorecard(true)}>📋</button>
-          {betAmount > 0 && <button className="skins-fab" onClick={() => setShowSkins(true)}>💰</button>}
-          <button className="challenges-fab" onClick={() => setShowChallenges(true)}>🎯</button>
+          <div className="fab-wrap fab-wrap-right" style={{bottom:"24px"}}><button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button><span className="fab-label">Roast</span></div>
+          {activeSession && <div className="fab-wrap fab-wrap-right" style={{bottom:"84px"}}><button className="chat-fab" onClick={() => setShowChat(true)}>💬</button><span className="fab-label">Chat</span></div>}
+          <div className="fab-wrap fab-wrap-right" style={{bottom:"144px"}}><button className="stats-fab" onClick={() => setShowStats(true)}>📊</button><span className="fab-label">Stats</span></div>
+          <div className="fab-wrap fab-wrap-left" style={{bottom:"24px"}}><button className="scorecard-fab" onClick={() => setShowScorecard(true)}>📋</button><span className="fab-label">Scorecard</span></div>
+          {betAmount > 0 && <div className="fab-wrap fab-wrap-left" style={{bottom:"84px"}}><button className="skins-fab" onClick={() => setShowSkins(true)}>💰</button><span className="fab-label">Skins</span></div>}
+          <div className="fab-wrap fab-wrap-left" style={{bottom:"144px"}}><button className="challenges-fab" onClick={() => setShowChallenges(true)}>🎯</button><span className="fab-label">Challenges</span></div>
         </>
       )}
 
@@ -1402,7 +1402,7 @@ export default function App() {
           onBack={() => setScreen("roast")} />
       )}
       {showHistoryBtn && (
-        <button className="history-fab" onClick={() => setShowHistory(true)}>🏆</button>
+        <div className="fab-wrap fab-wrap-left" style={{bottom:"24px"}}><button className="history-fab" onClick={() => setShowHistory(true)}>🏆</button><span className="fab-label">History</span></div>
       )}
       {screen === "final" && (
         <FinalScreen players={players} allScores={allScores} roastLog={roastLog}
@@ -2594,7 +2594,11 @@ const CSS = `
 
 /* Banner + FAB */
 .spec-banner { width:100%; max-width:480px; background:#0a1a0a; color:#16a34a; font-size:12px; font-weight:600; letter-spacing:1px; text-align:center; padding:8px; cursor:pointer; border-bottom:1px solid #0a2a0a; }
-.trash-talk-fab { position:fixed; bottom:24px; right:20px; width:52px; height:52px; border-radius:50%; background:#16a34a; border:none; font-size:22px; cursor:pointer; z-index:100; box-shadow:0 4px 20px rgba(22,163,74,0.4); transition:transform 0.15s; }
+.fab-wrap { position:fixed; display:flex; flex-direction:column; align-items:center; gap:3px; z-index:100; }
+.fab-wrap-right { right:20px; }
+.fab-wrap-left { left:20px; }
+.fab-label { font-size:9px; font-weight:600; color:#555; letter-spacing:0.5px; text-transform:uppercase; white-space:nowrap; }
+.trash-talk-fab { position:relative; bottom:auto; right:auto; width:52px; height:52px; border-radius:50%; background:#16a34a; border:none; font-size:22px; cursor:pointer; z-index:100; box-shadow:0 4px 20px rgba(22,163,74,0.4); transition:transform 0.15s; }
 .trash-talk-fab:active { transform:scale(0.92); }
 
 /* Setup */
@@ -2894,13 +2898,13 @@ const CSS = `
 .sc-roast-meta { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
 .sc-roast-player { font-size:12px; font-weight:600; color:#888; flex:1; }
 .sc-roast-text { font-size:12px; color:#666; font-style:italic; line-height:1.5; }
-.skins-fab { position:fixed; bottom:80px; left:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.skins-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
 .skins-fab:active { transform:scale(0.92); }
-.challenges-fab { position:fixed; bottom:136px; left:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.challenges-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
 .challenges-fab:active { transform:scale(0.92); }
-.history-fab { position:fixed; bottom:24px; left:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.history-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
 .history-fab:active { transform:scale(0.92); }
-.scorecard-fab { position:fixed; bottom:24px; left:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.scorecard-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
 .scorecard-fab:active { transform:scale(0.92); }
 
 /* Skins Tracker */
@@ -2993,7 +2997,7 @@ const CSS = `
 .chat-send-btn { width:42px; height:42px; background:#16a34a; border:none; border-radius:8px; color:#fff; font-size:18px; cursor:pointer; transition:opacity 0.2s; }
 .chat-send-btn:disabled { opacity:0.3; }
 .chat-note { text-align:center; font-size:11px; color:#333; margin-top:6px; }
-.chat-fab { position:fixed; bottom:84px; right:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.chat-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
 .chat-fab:active { transform:scale(0.92); }
 .chat-unread { position:absolute; top:-2px; right:-2px; width:16px; height:16px; background:#f59e0b; border-radius:50%; font-size:10px; color:#000; font-weight:700; display:flex; align-items:center; justify-content:center; }
 
@@ -3055,6 +3059,6 @@ const CSS = `
 .stats-roast-hole { font-family:'Bebas Neue',sans-serif; font-size:14px; color:#16a34a; min-width:28px; }
 .stats-roast-player { font-size:12px; font-weight:600; color:#888; min-width:60px; }
 .stats-roast-text { font-size:12px; color:#555; font-style:italic; line-height:1.4; }
-.stats-fab { position:fixed; bottom:144px; right:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.stats-fab { position:relative; bottom:auto; left:auto; right:auto; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
 .stats-fab:active { transform:scale(0.92); }
 `;
