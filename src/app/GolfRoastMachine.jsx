@@ -352,7 +352,7 @@ function SetupScreen({ onStart }) {
 // ════════════════════════════════════════════════════════════════════════════
 // HOLE SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo, onBack, onOpenMultiplayer, liveRoomId }) {
+function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo, onBack, onOpenMultiplayer, liveRoomId, onForward, maxHole }) {
   const [holeScores, setHoleScores] = useState(players.reduce((a, p) => ({ ...a, [p.name]: "" }), {}));
   const [worstShot, setWorstShot] = useState("");
   const [worstPlayer, setWorstPlayer] = useState(players[0].name);
@@ -372,7 +372,10 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
 
   return (
     <div className="screen hole-screen screen-with-back">
-      {onBack && <button className="back-btn" onClick={onBack}>← {hole === 1 ? "Setup" : "Back"}</button>}
+      <div className="nav-btns">
+        {onBack && <button className="back-btn" onClick={onBack}>← {hole === 1 ? "Setup" : "Back"}</button>}
+        {onForward && <button className="back-btn fwd-btn" onClick={onForward}>Hole {hole + 1} →</button>}
+      </div>
       <div className="hole-header" style={{ borderColor: intensity.color }}>
         <div>
           <div className="hole-badge" style={{ background: intensity.color }}>HOLE {hole}</div>
@@ -470,7 +473,7 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
 // ════════════════════════════════════════════════════════════════════════════
 // ROAST SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound, courseInfo, onBack }) {
+function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound, courseInfo, onBack, onForward, maxHole }) {
   const [roast, setRoast] = useState("");
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
@@ -1043,6 +1046,7 @@ export default function App() {
   const [betAmount, setBetAmount] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   const [hole, setHole] = useState(1);
+  const [maxHole, setMaxHole] = useState(1);
   const [allScores, setAllScores] = useState([]);
   const [roundScores, setRoundScores] = useState([]);
   const [currentHoleData, setCurrentHoleData] = useState(null);
@@ -1136,6 +1140,7 @@ export default function App() {
     setCourseInfo(session.course_info || null);
     setPropBets(session.prop_bets || null);
     setTotalHoles(session.total_holes || 18);
+    setMaxHole(session.current_hole || 1);
     setSessionId(session.id);
     setResumeSession(null);
     setScreen("hole");
@@ -1198,7 +1203,9 @@ export default function App() {
     const newRoundScores = [...roundScores, { hole, scores: currentHoleData.scores }];
     setAllScores(newScores);
     setRoundScores(newRoundScores);
-    setHole(hole + 1);
+    const nextHole = hole + 1;
+    setHole(nextHole);
+    setMaxHole(prev => Math.max(prev, nextHole));
     setScreen("hole");
     if (sessionId) {
       updateSession(sessionId, { all_scores: newScores, current_hole: hole + 1 });
@@ -1218,6 +1225,7 @@ export default function App() {
   const handleNextRound = () => {
     setCurrentRound(currentRound + 1);
     setHole(1);
+    setMaxHole(1);
     setRoundScores([]);
     if (sessionId) updateGameSession(sessionId, { current_round: currentRound + 1, current_hole: 1, round_scores: [] });
     setScreen("course");
@@ -1242,7 +1250,7 @@ export default function App() {
 
   const handleRestart = () => {
     clearSessionId();
-    setScreen("setup"); setHole(1); setCurrentRound(1);
+    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
     setResumeSession(null); setLiveRoomId(null); setRoomId(null);
@@ -1323,6 +1331,8 @@ export default function App() {
           betAmount={betAmount} onSubmit={handleHoleSubmit} courseInfo={courseInfo}
           pendingNominations={isMultiplayer ? pendingNominations : []} roomId={roomId} isMultiplayer={isMultiplayer}
           onBack={hole > 1 ? () => { setHole(hole - 1); setScreen("roast"); } : () => setScreen("props")}
+          onForward={hole < maxHole ? () => { setHole(hole + 1); setScreen("hole"); } : null}
+          maxHole={maxHole}
           onOpenMultiplayer={!isMultiplayer ? handleOpenMultiplayer : null}
           liveRoomId={liveRoomId} />
       )}
@@ -1333,6 +1343,8 @@ export default function App() {
           photoPreview={currentHoleData.photoPreview} courseInfo={courseInfo}
           onNext={handleNext} onEndRound={handleEndRound} onFinal={handleFinal}
           onSaveRoast={handleSaveRoast} onBack={() => setScreen("hole")}
+          onForward={hole < maxHole ? () => { setHole(hole + 1); setScreen("hole"); } : null}
+          maxHole={maxHole}
           isLastHole={isLastHole} isLastRound={isLastRound} />
       )}
       {screen === "roundsummary" && (
@@ -2377,6 +2389,8 @@ const CSS = `
 
 /* Back button */
 .back-btn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:#555; font-size:13px; font-weight:600; cursor:pointer; padding:6px 10px 6px 0; border-radius:6px; transition:color 0.2s; margin-bottom:8px; }
+.fwd-btn { color:#16a34a !important; margin-left:auto; padding:6px 0 6px 10px !important; }
+.nav-btns { display:flex; align-items:center; justify-content:space-between; width:100%; }
 .back-btn:hover { color:#f0ece4; }
 .screen-with-back { position:relative; }
 
