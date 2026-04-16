@@ -352,12 +352,12 @@ function SetupScreen({ onStart }) {
 // ════════════════════════════════════════════════════════════════════════════
 // HOLE SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo, onBack, onOpenMultiplayer, liveRoomId, onForward, maxHole }) {
-  const [holeScores, setHoleScores] = useState(players.reduce((a, p) => ({ ...a, [p.name]: "" }), {}));
-  const [worstShot, setWorstShot] = useState("");
-  const [worstPlayer, setWorstPlayer] = useState(players[0].name);
-  const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
+function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo, onBack, onOpenMultiplayer, liveRoomId, onForward, maxHole, savedData, onCacheData }) {
+  const [holeScores, setHoleScores] = useState(savedData?.scores || players.reduce((a, p) => ({ ...a, [p.name]: "" }), {}));
+  const [worstShot, setWorstShot] = useState(savedData?.worstShot || "");
+  const [worstPlayer, setWorstPlayer] = useState(savedData?.worstPlayer || players[0].name);
+  const [photo, setPhoto] = useState(savedData?.photo || null);
+  const [photoPreview, setPhotoPreview] = useState(savedData?.photoPreview || null);
   const fileRef = useRef();
   const intensity = getIntensity(hole);
   const allFilled = players.every((p) => holeScores[p.name] !== "");
@@ -462,7 +462,7 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
       )}
 
       <button className={`btn-primary ${!allFilled ? "disabled" : ""}`}
-        onClick={() => allFilled && onSubmit(holeScores, worstPlayer, worstShot, photo, photoPreview)}
+        onClick={() => { if (allFilled) { onCacheData && onCacheData({ scores: holeScores, worstShot, worstPlayer, photo, photoPreview }); onSubmit(holeScores, worstPlayer, worstShot, photo, photoPreview); } }}
         style={allFilled ? { background: intensity.color } : {}}>
         ROAST 'EM →
       </button>
@@ -1047,6 +1047,7 @@ export default function App() {
   const [currentRound, setCurrentRound] = useState(1);
   const [hole, setHole] = useState(1);
   const [maxHole, setMaxHole] = useState(1);
+  const [holeDataCache, setHoleDataCache] = useState({}); // stores entered data per hole
   const [allScores, setAllScores] = useState([]);
   const [roundScores, setRoundScores] = useState([]);
   const [currentHoleData, setCurrentHoleData] = useState(null);
@@ -1227,6 +1228,7 @@ export default function App() {
     setHole(1);
     setMaxHole(1);
     setRoundScores([]);
+    setHoleDataCache({});
     if (sessionId) updateGameSession(sessionId, { current_round: currentRound + 1, current_hole: 1, round_scores: [] });
     setScreen("course");
   };
@@ -1250,7 +1252,7 @@ export default function App() {
 
   const handleRestart = () => {
     clearSessionId();
-    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1);
+    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1); setHoleDataCache({});
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
     setResumeSession(null); setLiveRoomId(null); setRoomId(null);
@@ -1333,6 +1335,8 @@ export default function App() {
           onBack={hole > 1 ? () => { setHole(hole - 1); setScreen("roast"); } : () => setScreen("props")}
           onForward={hole < maxHole ? () => { setHole(hole + 1); setScreen("hole"); } : null}
           maxHole={maxHole}
+          savedData={holeDataCache[hole] || null}
+          onCacheData={(data) => setHoleDataCache(prev => ({ ...prev, [hole]: data }))}
           onOpenMultiplayer={!isMultiplayer ? handleOpenMultiplayer : null}
           liveRoomId={liveRoomId} />
       )}
