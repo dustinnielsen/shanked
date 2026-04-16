@@ -352,7 +352,7 @@ function SetupScreen({ onStart }) {
 // ════════════════════════════════════════════════════════════════════════════
 // HOLE SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo }) {
+function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pendingNominations = [], isMultiplayer = false, courseInfo, onBack, onOpenMultiplayer, liveRoomId }) {
   const [holeScores, setHoleScores] = useState(players.reduce((a, p) => ({ ...a, [p.name]: "" }), {}));
   const [worstShot, setWorstShot] = useState("");
   const [worstPlayer, setWorstPlayer] = useState(players[0].name);
@@ -371,7 +371,8 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
   };
 
   return (
-    <div className="screen hole-screen">
+    <div className="screen hole-screen screen-with-back">
+      {onBack && hole > 1 && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="hole-header" style={{ borderColor: intensity.color }}>
         <div>
           <div className="hole-badge" style={{ background: intensity.color }}>HOLE {hole}</div>
@@ -434,6 +435,29 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
         </div>
       )}
 
+      {/* Open to Multiplayer mid-round */}
+      {!isMultiplayer && onOpenMultiplayer && (
+        liveRoomId ? (
+          <div className="mp-code-banner">
+            <div>
+              <div className="mp-code-label">Room Code — share with players</div>
+              <div className="mp-code-val">{liveRoomId}</div>
+            </div>
+            <button className="mp-code-share" onClick={async () => {
+              const link = `${window.location.origin}${window.location.pathname}?join=${liveRoomId}`;
+              try {
+                if (navigator.share) await navigator.share({ text: `Join Shanked! Code: ${liveRoomId}\n${link}` });
+                else { await navigator.clipboard.writeText(link); alert("Link copied!"); }
+              } catch {}
+            }}>📤</button>
+          </div>
+        ) : (
+          <button className="open-mp-btn" onClick={onOpenMultiplayer}>
+            👥 Open This Round to Multiplayer
+          </button>
+        )
+      )}
+
       <button className={`btn-primary ${!allFilled ? "disabled" : ""}`}
         onClick={() => allFilled && onSubmit(holeScores, worstPlayer, worstShot, photo, photoPreview)}
         style={allFilled ? { background: intensity.color } : {}}>
@@ -446,7 +470,7 @@ function HoleScreen({ players, hole, round, totalRounds, onSubmit, betAmount, pe
 // ════════════════════════════════════════════════════════════════════════════
 // ROAST SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound, courseInfo }) {
+function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot, photo, photoPreview, onNext, onEndRound, onFinal, onSaveRoast, isLastHole, isLastRound, courseInfo, onBack }) {
   const [roast, setRoast] = useState("");
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
@@ -496,7 +520,8 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
   };
 
   return (
-    <div className="screen roast-screen">
+    <div className="screen roast-screen screen-with-back">
+      {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="roast-target" style={{ color: intensity.color }}>{intensity.emoji} {worstPlayer.toUpperCase()} GETS ROASTED</div>
       {photoPreview && (
         <div className="hole-photo">
@@ -547,7 +572,7 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
 // ════════════════════════════════════════════════════════════════════════════
 // ROUND SUMMARY (between rounds)
 // ════════════════════════════════════════════════════════════════════════════
-function RoundSummaryScreen({ players, round, roundScores, betAmount, cumulativeScores, onNextRound }) {
+function RoundSummaryScreen({ players, round, roundScores, betAmount, cumulativeScores, onNextRound, onBack }) {
   const roundTotals = players.map(p => ({
     name: p.name,
     total: roundScores.reduce((s, h) => s + (parseInt(h.scores[p.name]) || 0), 0),
@@ -563,7 +588,8 @@ function RoundSummaryScreen({ players, round, roundScores, betAmount, cumulative
   const betPot = betAmount * 18 * (players.length - 1);
 
   return (
-    <div className="screen summary-screen">
+    <div className="screen summary-screen screen-with-back">
+      {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="summary-header">
         <div className="summary-icon">🏁</div>
         <h2 className="summary-title">ROUND {round} COMPLETE</h2>
@@ -651,7 +677,8 @@ Make each bet about a specific player doing something hilarious or embarrassing.
   };
 
   return (
-    <div className="screen prop-screen">
+    <div className="screen prop-screen screen-with-back">
+      {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="prop-header">
         <h2 className="prop-title">🎯 PROP BETS</h2>
         <p className="prop-sub">AI-generated bets for this round. Track who wins each.</p>
@@ -1025,6 +1052,7 @@ export default function App() {
   const [showChat, setShowChat] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [courseInfo, setCourseInfo] = useState(null);
+  const [liveRoomId, setLiveRoomId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [spectatorLink, setSpectatorLink] = useState("");
   const [showSpectatorModal, setShowSpectatorModal] = useState(false);
@@ -1118,13 +1146,27 @@ export default function App() {
 
   const handleRoomReady = async (rid) => {
     setRoomId(rid);
-    // Also set spectator-style link for the room
     const link = `${window.location.origin}${window.location.pathname}?join=${rid}`;
     setSpectatorLink(link);
     setScreen("props");
   };
 
   const handlePropsDone = (bets, winners) => { setPropBets({ bets, winners }); setScreen("hole"); };
+
+  // Open solo round to multiplayer mid-round
+  const handleOpenMultiplayer = async () => {
+    const rid = genId().slice(0, 4);
+    setRoomId(rid);
+    setIsMultiplayer(false); // host stays in solo view but room exists for others
+    setLiveRoomId(rid);
+    await createRoom(rid, tripName, players, totalRounds, betAmount);
+    // Update room with current state
+    await updateRoom(rid, {
+      current_hole: hole, current_round: currentRound,
+      all_scores: allScores, roast_log: roastLog,
+    });
+    if (sessionId) updateGameSession(sessionId, { room_id: rid });
+  };
 
   const handleHoleSubmit = (scores, worstPlayer, worstShot, photo, photoPreview) => {
     setCurrentHoleData({ scores, worstPlayer, worstShot, photo, photoPreview });
@@ -1203,7 +1245,7 @@ export default function App() {
     setScreen("setup"); setHole(1); setCurrentRound(1);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
-    setResumeSession(null);
+    setResumeSession(null); setLiveRoomId(null); setRoomId(null);
   };
 
   const isLastHole = hole === totalHoles;
@@ -1270,16 +1312,19 @@ export default function App() {
         <ResumeScreen session={resumeSession} onResume={() => handleResume(resumeSession)} onNew={handleRestart} />
       )}
       {screen === "setup" && <SetupScreen onStart={handleStart} />}
-      {screen === "course" && <CourseSetupScreen onDone={handleCourseDone} onSkip={handleCourseSkip} />}
+      {screen === "course" && <CourseSetupScreen onDone={handleCourseDone} onSkip={handleCourseSkip} onBack={() => setScreen("setup")} />}
       {screen === "mp_lobby" && (
         <MultiplayerLobby tripName={tripName} players={players} totalRounds={totalRounds}
           betAmount={betAmount} onRoomReady={handleRoomReady} />
       )}
-      {screen === "props" && <PropBetsScreenV2 players={players} onDone={handlePropsDone} />}
+      {screen === "props" && <PropBetsScreenV2 players={players} onDone={handlePropsDone} onBack={() => setScreen("course")} />}
       {screen === "hole" && (
         <HoleScreen players={players} hole={hole} round={currentRound} totalRounds={totalRounds}
           betAmount={betAmount} onSubmit={handleHoleSubmit} courseInfo={courseInfo}
-          pendingNominations={isMultiplayer ? pendingNominations : []} roomId={roomId} isMultiplayer={isMultiplayer} />
+          pendingNominations={isMultiplayer ? pendingNominations : []} roomId={roomId} isMultiplayer={isMultiplayer}
+          onBack={hole > 1 ? () => setScreen("roast") : () => setScreen("props")}
+          onOpenMultiplayer={!isMultiplayer ? handleOpenMultiplayer : null}
+          liveRoomId={liveRoomId} />
       )}
       {screen === "roast" && currentHoleData && (
         <RoastScreen players={players} hole={hole} round={currentRound}
@@ -1287,12 +1332,13 @@ export default function App() {
           worstShot={currentHoleData.worstShot} photo={currentHoleData.photo}
           photoPreview={currentHoleData.photoPreview} courseInfo={courseInfo}
           onNext={handleNext} onEndRound={handleEndRound} onFinal={handleFinal}
-          onSaveRoast={handleSaveRoast}
+          onSaveRoast={handleSaveRoast} onBack={() => setScreen("hole")}
           isLastHole={isLastHole} isLastRound={isLastRound} />
       )}
       {screen === "roundsummary" && (
         <RoundSummaryScreen players={players} round={currentRound} roundScores={roundScores}
-          betAmount={betAmount} cumulativeScores={allScores} onNextRound={handleNextRound} />
+          betAmount={betAmount} cumulativeScores={allScores} onNextRound={handleNextRound}
+          onBack={() => setScreen("roast")} />
       )}
       {screen === "final" && (
         <FinalScreen players={players} allScores={allScores} roastLog={roastLog}
@@ -1735,7 +1781,7 @@ function GroupChatModal({ sessionId, myName, onClose }) {
 // ════════════════════════════════════════════════════════════════════════════
 // COURSE SETUP SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function CourseSetupScreen({ onDone, onSkip }) {
+function CourseSetupScreen({ onDone, onSkip, onBack }) {
   const [courseName, setCourseName] = useState("");
   const [pars, setPars] = useState(Array(18).fill(4));
   const [numHoles, setNumHoles] = useState(18);
@@ -1772,7 +1818,8 @@ function CourseSetupScreen({ onDone, onSkip }) {
   const totalPar = pars.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="screen course-screen">
+    <div className="screen course-screen screen-with-back">
+      {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="course-header">
         <h2 className="course-title">⛳ COURSE SETUP</h2>
         <p className="course-sub">Enter course details for smarter roasts and +/- par scoring</p>
@@ -1821,7 +1868,7 @@ function CourseSetupScreen({ onDone, onSkip }) {
 // ════════════════════════════════════════════════════════════════════════════
 // IMPROVED PROP BETS SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-function PropBetsScreenV2({ players, onDone }) {
+function PropBetsScreenV2({ players, onDone, onBack }) {
   const [bets, setBets] = useState([]);
   const [customBet, setCustomBet] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -1865,7 +1912,8 @@ function PropBetsScreenV2({ players, onDone }) {
   };
 
   return (
-    <div className="screen prop-screen">
+    <div className="screen prop-screen screen-with-back">
+      {onBack && <button className="back-btn" onClick={onBack}>← Back</button>}
       <div className="prop-header">
         <h2 className="prop-title">🎯 PROP BETS</h2>
         <p className="prop-sub">Set your bets before the round. Track who wins each one.</p>
@@ -2326,6 +2374,19 @@ const CSS = `
 .nom-from { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:6px; }
 .nom-player { font-size:14px; font-weight:700; }
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
+
+/* Back button */
+.back-btn { position:absolute; top:24px; left:20px; background:none; border:none; color:#555; font-size:14px; font-weight:600; cursor:pointer; padding:6px 10px; border-radius:6px; transition:color 0.2s, background 0.2s; display:flex; align-items:center; gap:6px; z-index:50; }
+.back-btn:hover { color:#f0ece4; background:#1a1a1a; }
+.screen-with-back { position:relative; }
+
+/* Open to multiplayer */
+.open-mp-btn { width:100%; padding:11px; background:transparent; border:1px dashed #166534; border-radius:8px; color:#16a34a; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; margin-bottom:12px; transition:all 0.2s; }
+.open-mp-btn:hover { background:#0a1a0a; }
+.mp-code-banner { background:#0a1a0a; border:1px solid #166534; border-radius:8px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
+.mp-code-label { font-size:12px; color:#16a34a; letter-spacing:1px; text-transform:uppercase; }
+.mp-code-val { font-family:'Russo One',sans-serif; font-size:24px; color:#16a34a; letter-spacing:4px; }
+.mp-code-share { background:none; border:none; color:#16a34a; font-size:18px; cursor:pointer; }
 
 /* Resume Screen */
 .resume-screen { padding-top:60px; display:flex; flex-direction:column; align-items:center; }
