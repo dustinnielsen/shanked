@@ -290,7 +290,6 @@ function SetupScreen({ onStart }) {
               ))}
             </div>
           </div>
-          </div>
           <div className="meta-field">
             <label className="meta-label">Rounds</label>
             <div className="round-btns">
