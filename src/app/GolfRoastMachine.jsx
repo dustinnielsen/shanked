@@ -1058,6 +1058,7 @@ export default function App() {
   const [showStats, setShowStats] = useState(false);
   const [courseInfo, setCourseInfo] = useState(null);
   const [liveRoomId, setLiveRoomId] = useState(null);
+  const [showScorecard, setShowScorecard] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [spectatorLink, setSpectatorLink] = useState("");
   const [showSpectatorModal, setShowSpectatorModal] = useState(false);
@@ -1199,6 +1200,12 @@ export default function App() {
     }
   };
 
+  const handleNextHoleFromScorecard = (holeNum) => {
+    setHole(holeNum);
+    setScreen("hole");
+    setShowScorecard(false);
+  };
+
   const handleNext = () => {
     const newScores = [...allScores, { hole, round: currentRound, scores: currentHoleData.scores }];
     const newRoundScores = [...roundScores, { hole, scores: currentHoleData.scores }];
@@ -1252,7 +1259,7 @@ export default function App() {
 
   const handleRestart = () => {
     clearSessionId();
-    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1); setHoleDataCache({});
+    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1); setHoleDataCache({}); setShowScorecard(false);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
     setResumeSession(null); setLiveRoomId(null); setRoomId(null);
@@ -1280,6 +1287,7 @@ export default function App() {
           <button className="trash-talk-fab" onClick={() => setShowTrashTalk(true)}>🔥</button>
           {activeSession && <button className="chat-fab" onClick={() => setShowChat(true)}>💬</button>}
           <button className="stats-fab" onClick={() => setShowStats(true)}>📊</button>
+          <button className="scorecard-fab" onClick={() => setShowScorecard(true)}>📋</button>
         </>
       )}
 
@@ -1291,6 +1299,17 @@ export default function App() {
       {showStats && (
         <StatsPanel players={players} allScores={allScores} roastLog={roastLog}
           courseInfo={courseInfo} onClose={() => setShowStats(false)} />
+      )}
+      {showScorecard && (
+        <div className="modal-overlay" onClick={() => setShowScorecard(false)}>
+          <div style={{ width:"100%", maxWidth:"480px", maxHeight:"90vh", overflowY:"auto", background:"#0a0a0a", borderRadius:"16px 16px 0 0", position:"absolute", bottom:0 }} onClick={e => e.stopPropagation()}>
+            <ScorecardScreen
+              players={players} allScores={allScores} roastLog={roastLog}
+              courseInfo={courseInfo} currentHole={hole} totalHoles={totalHoles || 18}
+              onGoToHole={handleNextHoleFromScorecard}
+              onClose={() => setShowScorecard(false)} />
+          </div>
+        </div>
       )}
 
       {showSpectatorModal && (
@@ -1345,7 +1364,9 @@ export default function App() {
           holeScores={currentHoleData.scores} worstPlayer={currentHoleData.worstPlayer}
           worstShot={currentHoleData.worstShot} photo={currentHoleData.photo}
           photoPreview={currentHoleData.photoPreview} courseInfo={courseInfo}
-          onNext={handleNext} onEndRound={handleEndRound} onFinal={handleFinal}
+          onNext={() => { handleNext(); setShowScorecard(true); }}
+          onEndRound={() => { handleEndRound(); }}
+          onFinal={handleFinal}
           onSaveRoast={handleSaveRoast} onBack={() => setScreen("hole")}
           onForward={hole < maxHole ? () => { setHole(hole + 1); setScreen("hole"); } : null}
           maxHole={maxHole}
@@ -2120,6 +2141,160 @@ function ResumeScreen({ session, onResume, onNew }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// SCORECARD SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+function ScorecardScreen({ players, allScores, roastLog, courseInfo, currentHole, totalHoles, onGoToHole, onClose }) {
+  const pars = courseInfo?.pars || Array(18).fill(4);
+  const totalPar = pars.slice(0, totalHoles).reduce((a, b) => a + b, 0);
+
+  // Build per-hole score lookup
+  const scoreByHole = {};
+  allScores.forEach(h => { scoreByHole[h.hole] = h.scores; });
+
+  // Running totals
+  const totals = players.map(p => ({
+    name: p.name,
+    total: allScores.reduce((s, h) => s + (parseInt(h.scores?.[p.name]) || 0), 0),
+  }));
+
+  const getScoreColor = (score, par) => {
+    if (!score || !par) return "#888";
+    const diff = score - par;
+    if (diff <= -2) return "#f59e0b"; // eagle or better - gold
+    if (diff === -1) return "#4ade80"; // birdie - green
+    if (diff === 0) return "#888";    // par - grey
+    if (diff === 1) return "#fb923c"; // bogey - orange
+    return "#f87171";                  // double+ - red
+  };
+
+  const getRoastForHole = (hole) => roastLog.find(r => r.hole === hole);
+
+  return (
+    <div className="screen scorecard-screen">
+      <div className="scorecard-header">
+        <div>
+          <h2 className="scorecard-title">SCORECARD</h2>
+          {courseInfo?.name && <p className="scorecard-course">⛳ {courseInfo.name} · Par {totalPar}</p>}
+        </div>
+        {onClose && <button className="modal-close" onClick={onClose} style={{ marginTop: "4px" }}>✕</button>}
+      </div>
+
+      {/* Player totals strip */}
+      <div className="sc-totals-strip">
+        {totals.sort((a, b) => a.total - b.total).map((p, i) => (
+          <div key={p.name} className={`sc-total-pill ${i === 0 && p.total > 0 ? "leading" : ""}`}>
+            <span className="sc-pill-name">{p.name.length > 6 ? p.name.slice(0, 6) : p.name}</span>
+            <span className="sc-pill-score">{p.total || "—"}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Hole rows */}
+      <div className="sc-rows">
+        {/* Header */}
+        <div className="sc-row sc-header-row">
+          <div className="sc-hole-col">HOLE</div>
+          <div className="sc-par-col">PAR</div>
+          {players.map(p => (
+            <div key={p.name} className="sc-player-col">{p.name.length > 5 ? p.name.slice(0, 5) : p.name}</div>
+          ))}
+          <div className="sc-roast-col"></div>
+        </div>
+
+        {Array.from({ length: totalHoles }, (_, i) => i + 1).map(h => {
+          const scores = scoreByHole[h];
+          const par = pars[h - 1];
+          const isCurrent = h === currentHole;
+          const isCompleted = !!scores;
+          const roast = getRoastForHole(h);
+
+          return (
+            <div
+              key={h}
+              className={`sc-row ${isCurrent ? "sc-current" : ""} ${isCompleted ? "sc-done" : "sc-upcoming"}`}
+              onClick={() => isCompleted || isCurrent ? onGoToHole(h) : null}
+            >
+              <div className="sc-hole-col">
+                <span className="sc-hole-num" style={isCurrent ? { color: "#16a34a" } : {}}>{h}</span>
+                {isCurrent && <span className="sc-current-dot">●</span>}
+              </div>
+              <div className="sc-par-col">{par}</div>
+              {players.map(p => {
+                const score = scores?.[p.name];
+                const color = getScoreColor(parseInt(score), par);
+                return (
+                  <div key={p.name} className="sc-player-col">
+                    {score ? (
+                      <span className="sc-score-val" style={{ color }}>{score}</span>
+                    ) : isCurrent ? (
+                      <span className="sc-enter-hint">—</span>
+                    ) : (
+                      <span className="sc-upcoming-dash">·</span>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="sc-roast-col">
+                {roast ? (
+                  <span className="sc-roast-icon" title={roast.roast}>🔥</span>
+                ) : isCurrent ? (
+                  <span className="sc-enter-btn">→</span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Totals row */}
+        <div className="sc-row sc-totals-row">
+          <div className="sc-hole-col sc-total-label">TOT</div>
+          <div className="sc-par-col">{totalPar}</div>
+          {players.map(p => {
+            const total = allScores.reduce((s, h) => s + (parseInt(h.scores?.[p.name]) || 0), 0);
+            const parTotal = pars.slice(0, allScores.length).reduce((a, b) => a + b, 0);
+            const vspar = total - parTotal;
+            return (
+              <div key={p.name} className="sc-player-col">
+                <span className="sc-total-val">{total || "—"}</span>
+                {total > 0 && <span className="sc-vspar" style={{ color: vspar > 0 ? "#f87171" : vspar < 0 ? "#4ade80" : "#888" }}>
+                  {vspar > 0 ? `+${vspar}` : vspar === 0 ? "E" : vspar}
+                </span>}
+              </div>
+            );
+          })}
+          <div className="sc-roast-col"></div>
+        </div>
+      </div>
+
+      {/* Roast log below */}
+      {roastLog.length > 0 && (
+        <div className="sc-roast-log">
+          <h3 className="section-label" style={{ marginBottom: "10px" }}>🔥 Roast Log</h3>
+          {roastLog.map((r, i) => {
+            const int = getIntensity(r.hole);
+            return (
+              <div key={i} className="sc-roast-entry">
+                <div className="sc-roast-meta">
+                  <span style={{ color: int.color, fontFamily: "'Bebas Neue', sans-serif", fontSize: "14px" }}>H{r.hole}</span>
+                  <span className="sc-roast-player">{r.player}</span>
+                  <span>{int.emoji}</span>
+                </div>
+                <p className="sc-roast-text">"{r.roast}"</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button className="btn-primary" style={{ marginTop: "16px", background: "#16a34a" }}
+        onClick={() => onGoToHole(currentHole)}>
+        ⛳ ENTER HOLE {currentHole} SCORES →
+      </button>
+    </div>
+  );
+}
+
 // ── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=Russo+One&display=swap');
@@ -2390,6 +2565,48 @@ const CSS = `
 .nom-from { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:6px; }
 .nom-player { font-size:14px; font-weight:700; }
 .nom-shot { font-size:12px; color:#666; font-style:italic; margin-top:4px; }
+
+/* Scorecard */
+.scorecard-screen { padding-top:20px; padding-bottom:80px; }
+.scorecard-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+.scorecard-title { font-family:'Bebas Neue',sans-serif; font-size:32px; letter-spacing:2px; }
+.scorecard-course { font-size:12px; color:#16a34a; margin-top:2px; }
+.sc-totals-strip { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px; }
+.sc-total-pill { display:flex; flex-direction:column; align-items:center; background:#111; border:1px solid #1e1e1e; border-radius:8px; padding:8px 12px; min-width:56px; }
+.sc-total-pill.leading { border-color:#16a34a; background:#0a1a0a; }
+.sc-pill-name { font-size:11px; color:#555; letter-spacing:0.5px; margin-bottom:2px; }
+.sc-pill-score { font-family:'Bebas Neue',sans-serif; font-size:22px; color:#f0ece4; }
+.sc-rows { background:#111; border:1px solid #1e1e1e; border-radius:10px; overflow:hidden; margin-bottom:16px; }
+.sc-row { display:flex; align-items:center; border-bottom:1px solid #161616; padding:0; }
+.sc-row:last-child { border-bottom:none; }
+.sc-header-row { background:#0d0d0d; }
+.sc-current { background:#0a1a0a; }
+.sc-done { cursor:pointer; transition:background 0.15s; }
+.sc-done:hover { background:#141414; }
+.sc-totals-row { background:#0d0d0d; border-top:2px solid #1e1e1e; }
+.sc-hole-col { width:36px; min-width:36px; padding:10px 6px; text-align:center; }
+.sc-par-col { width:28px; min-width:28px; padding:10px 4px; text-align:center; font-size:11px; color:#555; }
+.sc-player-col { flex:1; padding:8px 4px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1px; }
+.sc-roast-col { width:28px; min-width:28px; padding:10px 4px; text-align:center; }
+.sc-hole-num { font-family:'Bebas Neue',sans-serif; font-size:16px; color:#666; }
+.sc-current-dot { display:block; font-size:8px; color:#16a34a; line-height:1; margin-top:1px; }
+.sc-score-val { font-family:'Bebas Neue',sans-serif; font-size:18px; }
+.sc-total-val { font-family:'Bebas Neue',sans-serif; font-size:16px; color:#f0ece4; }
+.sc-vspar { font-size:10px; }
+.sc-enter-hint { font-size:14px; color:#333; }
+.sc-upcoming-dash { font-size:12px; color:#2a2a2a; }
+.sc-roast-icon { font-size:14px; cursor:default; }
+.sc-enter-btn { font-size:12px; color:#16a34a; font-weight:700; }
+.sc-total-label { font-family:'Bebas Neue',sans-serif; font-size:13px; color:#555; }
+.sc-header-row .sc-hole-col { font-size:10px; color:#444; letter-spacing:1px; }
+.sc-header-row .sc-player-col { font-size:10px; color:#444; letter-spacing:0.5px; }
+.sc-roast-log { margin-top:4px; }
+.sc-roast-entry { background:#111; border:1px solid #1a1a1a; border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+.sc-roast-meta { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.sc-roast-player { font-size:12px; font-weight:600; color:#888; flex:1; }
+.sc-roast-text { font-size:12px; color:#666; font-style:italic; line-height:1.5; }
+.scorecard-fab { position:fixed; bottom:24px; left:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.scorecard-fab:active { transform:scale(0.92); }
 
 /* Back button */
 .back-btn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:#555; font-size:13px; font-weight:600; cursor:pointer; padding:6px 10px 6px 0; border-radius:6px; transition:color 0.2s; margin-bottom:8px; }
