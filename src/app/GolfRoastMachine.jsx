@@ -1059,6 +1059,10 @@ export default function App() {
   const [courseInfo, setCourseInfo] = useState(null);
   const [liveRoomId, setLiveRoomId] = useState(null);
   const [showScorecard, setShowScorecard] = useState(false);
+  const [showSkins, setShowSkins] = useState(false);
+  const [showChallenges, setShowChallenges] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [challenges, setChallenges] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [spectatorLink, setSpectatorLink] = useState("");
   const [showSpectatorModal, setShowSpectatorModal] = useState(false);
@@ -1259,7 +1263,7 @@ export default function App() {
 
   const handleRestart = () => {
     clearSessionId();
-    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1); setHoleDataCache({}); setShowScorecard(false);
+    setScreen("setup"); setHole(1); setCurrentRound(1); setMaxHole(1); setHoleDataCache({}); setShowScorecard(false); setChallenges([]);
     setAllScores([]); setRoundScores([]); setCurrentHoleData(null); setRoastLog([]);
     setSessionId(null); setSpectatorLink(""); setCourseInfo(null); setPropBets([]);
     setResumeSession(null); setLiveRoomId(null); setRoomId(null);
@@ -1269,6 +1273,7 @@ export default function App() {
   const isLastRound = currentRound === totalRounds;
   const activeSession = sessionId || roomId;
   const showFABs = ["hole","roast","roundsummary"].includes(screen);
+  const showHistoryBtn = screen === "final";
 
   return (
     <div className="app">
@@ -1288,6 +1293,8 @@ export default function App() {
           {activeSession && <button className="chat-fab" onClick={() => setShowChat(true)}>💬</button>}
           <button className="stats-fab" onClick={() => setShowStats(true)}>📊</button>
           <button className="scorecard-fab" onClick={() => setShowScorecard(true)}>📋</button>
+          {betAmount > 0 && <button className="skins-fab" onClick={() => setShowSkins(true)}>💰</button>}
+          <button className="challenges-fab" onClick={() => setShowChallenges(true)}>🎯</button>
         </>
       )}
 
@@ -1299,6 +1306,23 @@ export default function App() {
       {showStats && (
         <StatsPanel players={players} allScores={allScores} roastLog={roastLog}
           courseInfo={courseInfo} onClose={() => setShowStats(false)} />
+      )}
+      {showSkins && (
+        <SkinsTracker players={players} allScores={allScores} betAmount={betAmount}
+          courseInfo={courseInfo} onClose={() => setShowSkins(false)} />
+      )}
+      {showChallenges && (
+        <HoleChallengesModal players={players} allScores={allScores} courseInfo={courseInfo}
+          challenges={challenges} onUpdateChallenge={setChallenges} onClose={() => setShowChallenges(false)} />
+      )}
+      {showHistory && (
+        <TripHistoryModal onClose={() => setShowHistory(false)}
+          currentTrip={screen === "final" ? { tripName, players, totalRounds, totalHoles, allScores, roastLog, courseInfo,
+            finalStandings: players.map(p => ({ name: p.name, total: allScores.reduce((s,h) => s+(parseInt(h.scores?.[p.name])||0),0) })).sort((a,b)=>a.total-b.total) } : null}
+          onSaveCurrent={async () => {
+            await saveTripToHistory({ tripName, players, totalRounds, totalHoles, allScores, roastLog, courseInfo,
+              finalStandings: players.map(p => ({ name: p.name, total: allScores.reduce((s,h) => s+(parseInt(h.scores?.[p.name])||0),0) })).sort((a,b)=>a.total-b.total) });
+          }} />
       )}
       {showScorecard && (
         <div className="modal-overlay" onClick={() => setShowScorecard(false)}>
@@ -1376,6 +1400,9 @@ export default function App() {
         <RoundSummaryScreen players={players} round={currentRound} roundScores={roundScores}
           betAmount={betAmount} cumulativeScores={allScores} onNextRound={handleNextRound}
           onBack={() => setScreen("roast")} />
+      )}
+      {showHistoryBtn && (
+        <button className="history-fab" onClick={() => setShowHistory(true)}>🏆</button>
       )}
       {screen === "final" && (
         <FinalScreen players={players} allScores={allScores} roastLog={roastLog}
@@ -2295,6 +2322,268 @@ function ScorecardScreen({ players, allScores, roastLog, courseInfo, currentHole
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// SKINS TRACKER
+// ════════════════════════════════════════════════════════════════════════════
+function SkinsTracker({ players, allScores, betAmount, courseInfo, onClose }) {
+  const pars = courseInfo?.pars || Array(18).fill(4);
+  
+  // Calculate skins
+  const skins = [];
+  let carryover = 0;
+  
+  allScores.forEach(h => {
+    const scores = players.map(p => ({ name: p.name, score: parseInt(h.scores?.[p.name]) || 99 }));
+    const minScore = Math.min(...scores.map(s => s.score));
+    const winners = scores.filter(s => s.score === minScore);
+    const skinVal = (betAmount || 1) + carryover;
+    
+    if (winners.length === 1) {
+      skins.push({ hole: h.hole, winner: winners[0].name, value: skinVal, tied: false, scores: h.scores });
+      carryover = 0;
+    } else {
+      skins.push({ hole: h.hole, winner: null, value: skinVal, tied: true, scores: h.scores });
+      carryover += (betAmount || 1);
+    }
+  });
+
+  // Tally winnings
+  const totals = players.reduce((acc, p) => ({ ...acc, [p.name]: 0 }), {});
+  skins.forEach(s => { if (s.winner) totals[s.winner] += s.value; });
+  const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const holesPlayed = allScores.length;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal skins-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">💰 SKINS</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {betAmount > 0 && (
+          <div className="skins-standings">
+            {sorted.map(([name, total], i) => (
+              <div key={name} className={`skins-standing-row ${i === 0 && total > 0 ? "skins-leader" : ""}`}>
+                <span className="skins-rank">{i === 0 && total > 0 ? "💰" : `#${i+1}`}</span>
+                <span className="skins-name">{name}</span>
+                <span className="skins-total">${total.toFixed(0)}</span>
+              </div>
+            ))}
+            {carryover > 0 && (
+              <div className="skins-carryover">🔄 ${carryover} carrying into hole {holesPlayed + 1}</div>
+            )}
+          </div>
+        )}
+
+        <div className="skins-holes">
+          <h3 className="section-label" style={{ marginBottom: "10px" }}>Hole Results</h3>
+          {skins.length === 0 && <p style={{ color: "#555", fontSize: "13px" }}>No holes completed yet.</p>}
+          {skins.map(s => (
+            <div key={s.hole} className={`skins-hole-row ${s.tied ? "skins-tied" : "skins-won"}`}>
+              <span className="skins-hole-num">H{s.hole}</span>
+              <div className="skins-hole-scores">
+                {players.map(p => (
+                  <span key={p.name} className="skins-player-score">
+                    {p.name.slice(0,4)}: {s.scores?.[p.name] || "—"}
+                  </span>
+                ))}
+              </div>
+              <span className="skins-hole-result">
+                {s.tied ? <span className="skins-tie">TIE 🔄</span> : <span className="skins-win">{s.winner} +${s.value}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {holesPlayed < 18 && (
+          <p className="skins-note">{18 - holesPlayed} holes remaining · ${carryover > 0 ? carryover : betAmount || 1}/hole</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HOLE CHALLENGES (CTP, Long Drive, etc.)
+// ════════════════════════════════════════════════════════════════════════════
+function HoleChallengesModal({ players, allScores, courseInfo, challenges, onUpdateChallenge, onClose }) {
+  const pars = courseInfo?.pars || Array(18).fill(4);
+  const par3Holes = pars.map((p, i) => p === 3 ? i + 1 : null).filter(Boolean);
+  const [newChallenge, setNewChallenge] = useState({ hole: par3Holes[0] || 1, type: "ctp", winner: "" });
+
+  const challengeTypes = [
+    { value: "ctp", label: "🎯 Closest to Pin" },
+    { value: "ld", label: "💪 Long Drive" },
+    { value: "birdie", label: "🐦 First Birdie" },
+    { value: "custom", label: "⭐ Custom" },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal challenges-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">🎯 HOLE CHALLENGES</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Add challenge */}
+        <div className="challenge-add-form">
+          <h3 className="section-label">Add Challenge</h3>
+          <div className="challenge-form-row">
+            <select className="roast-select" value={newChallenge.hole}
+              onChange={e => setNewChallenge(p => ({ ...p, hole: parseInt(e.target.value) }))}>
+              {Array.from({ length: 18 }, (_, i) => i + 1).map(h => (
+                <option key={h} value={h}>Hole {h}{pars[h-1] === 3 ? " (Par 3)" : ""}</option>
+              ))}
+            </select>
+            <select className="roast-select" value={newChallenge.type}
+              onChange={e => setNewChallenge(p => ({ ...p, type: e.target.value }))}>
+              {challengeTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <button className="btn-secondary" style={{ marginTop: "8px" }}
+            onClick={() => {
+              onUpdateChallenge([...challenges, { ...newChallenge, winner: null, id: Date.now() }]);
+            }}>
+            + Add Challenge
+          </button>
+        </div>
+
+        {/* Challenge list */}
+        {challenges.length > 0 && (
+          <div className="challenges-list">
+            <h3 className="section-label" style={{ margin: "16px 0 10px" }}>Active Challenges</h3>
+            {challenges.map((c, i) => (
+              <div key={c.id} className="challenge-card">
+                <div className="challenge-top">
+                  <span className="challenge-label">
+                    {challengeTypes.find(t => t.value === c.type)?.label} · Hole {c.hole}
+                  </span>
+                  <button className="bet-remove" onClick={() => onUpdateChallenge(challenges.filter((_, idx) => idx !== i))}>✕</button>
+                </div>
+                <div className="challenge-winner-row">
+                  <span className="bet-winner-label">Winner:</span>
+                  <div className="bet-winner-btns">
+                    {players.map(p => (
+                      <button key={p.name}
+                        className={`bet-winner-btn ${c.winner === p.name ? "active-won" : ""}`}
+                        onClick={() => {
+                          const updated = [...challenges];
+                          updated[i] = { ...c, winner: c.winner === p.name ? null : p.name };
+                          onUpdateChallenge(updated);
+                        }}>{p.name}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {challenges.length === 0 && (
+          <p style={{ color: "#555", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>
+            No challenges yet. Par 3 holes are great for Closest to Pin!
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TRIP HISTORY (Supabase-persisted)
+// ════════════════════════════════════════════════════════════════════════════
+async function saveTripToHistory(tripData) {
+  return supaFetch("/trip_history", "POST", {
+    id: genId(),
+    trip_name: tripData.tripName,
+    players: tripData.players,
+    total_rounds: tripData.totalRounds,
+    total_holes: tripData.totalHoles || 18,
+    all_scores: tripData.allScores,
+    roast_log: tripData.roastLog,
+    course_info: tripData.courseInfo,
+    final_standings: tripData.finalStandings,
+    roast_count: tripData.roastLog?.length || 0,
+  });
+}
+
+async function loadTripHistory() {
+  const rows = await supaFetch("/trip_history?order=created_at.desc&limit=20");
+  return rows || [];
+}
+
+function TripHistoryModal({ onClose, currentTrip, onSaveCurrent }) {
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    loadTripHistory().then(t => { setTrips(t); setLoading(false); });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSaveCurrent();
+    const updated = await loadTripHistory();
+    setTrips(updated);
+    setSaving(false);
+    setSaved(true);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal history-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">🏆 TRIP HISTORY</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {currentTrip && !saved && (
+          <button className="btn-secondary" style={{ marginBottom: "16px" }} onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "💾 Save Current Trip to History"}
+          </button>
+        )}
+        {saved && <p style={{ color: "#16a34a", fontSize: "13px", marginBottom: "12px", textAlign: "center" }}>✅ Trip saved!</p>}
+
+        {loading ? (
+          <div className="loading-roast" style={{ padding: "20px 0" }}>
+            <div className="loading-dots"><span style={{ background: "#16a34a" }} /><span style={{ background: "#16a34a" }} /><span style={{ background: "#16a34a" }} /></div>
+          </div>
+        ) : trips.length === 0 ? (
+          <p style={{ color: "#555", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>No saved trips yet.</p>
+        ) : (
+          trips.map(trip => {
+            const standings = trip.final_standings || [];
+            const winner = standings[0];
+            return (
+              <div key={trip.id} className="trophy-entry">
+                <div className="trophy-trip-name">{trip.trip_name}</div>
+                <div className="trophy-trip-meta">
+                  {new Date(trip.created_at).toLocaleDateString()} · {trip.total_rounds} round{trip.total_rounds > 1 ? "s" : ""} · {trip.players?.length} players
+                  {trip.course_info?.name && ` · ${trip.course_info.name}`}
+                </div>
+                {standings.length > 0 && (
+                  <div className="trophy-scores">
+                    {standings.slice(0, 4).map((p, i) => (
+                      <span key={p.name} className="trophy-score-pill">
+                        {i === 0 ? "🏅" : i === standings.length - 1 ? "💀" : ""}{p.name}: {p.total}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p style={{ fontSize: "11px", color: "#555", marginTop: "6px" }}>🔥 {trip.roast_count} roasts fired</p>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=Russo+One&display=swap');
@@ -2605,8 +2894,51 @@ const CSS = `
 .sc-roast-meta { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
 .sc-roast-player { font-size:12px; font-weight:600; color:#888; flex:1; }
 .sc-roast-text { font-size:12px; color:#666; font-style:italic; line-height:1.5; }
+.skins-fab { position:fixed; bottom:80px; left:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.skins-fab:active { transform:scale(0.92); }
+.challenges-fab { position:fixed; bottom:136px; left:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
+.challenges-fab:active { transform:scale(0.92); }
+.history-fab { position:fixed; bottom:24px; left:20px; width:48px; height:48px; border-radius:50%; background:#166534; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(22,101,52,0.4); transition:transform 0.15s; }
+.history-fab:active { transform:scale(0.92); }
 .scorecard-fab { position:fixed; bottom:24px; left:20px; width:48px; height:48px; border-radius:50%; background:#15803d; border:none; font-size:20px; cursor:pointer; z-index:100; box-shadow:0 4px 16px rgba(21,128,61,0.4); transition:transform 0.15s; }
 .scorecard-fab:active { transform:scale(0.92); }
+
+/* Skins Tracker */
+.skins-modal { max-height:85vh; overflow-y:auto; }
+.skins-standings { background:#0a1a0a; border:1px solid #14532d; border-radius:10px; padding:14px; margin-bottom:16px; }
+.skins-standing-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #0d2a0d; }
+.skins-standing-row:last-child { border-bottom:none; }
+.skins-standing-row.skins-leader { background:#0d2a0d; border-radius:6px; padding:8px; }
+.skins-rank { font-size:16px; min-width:24px; }
+.skins-name { flex:1; font-size:14px; font-weight:500; }
+.skins-total { font-family:'Bebas Neue',sans-serif; font-size:24px; color:#16a34a; }
+.skins-carryover { font-size:12px; color:#f59e0b; text-align:center; margin-top:8px; }
+.skins-holes { margin-bottom:12px; }
+.skins-hole-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #1a1a1a; font-size:12px; }
+.skins-hole-row:last-child { border-bottom:none; }
+.skins-hole-row.skins-won { background:rgba(22,163,74,0.05); border-radius:4px; }
+.skins-hole-row.skins-tied { opacity:0.6; }
+.skins-hole-num { font-family:'Bebas Neue',sans-serif; font-size:14px; color:#555; min-width:24px; }
+.skins-hole-scores { display:flex; gap:8px; flex:1; flex-wrap:wrap; }
+.skins-player-score { color:#666; font-size:11px; }
+.skins-hole-result { font-size:11px; white-space:nowrap; }
+.skins-win { color:#16a34a; font-weight:600; }
+.skins-tie { color:#f59e0b; }
+.skins-note { font-size:11px; color:#555; text-align:center; margin-top:8px; }
+
+/* Hole Challenges */
+.challenges-modal { max-height:85vh; overflow-y:auto; }
+.challenge-add-form { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:14px; margin-bottom:4px; }
+.challenge-form-row { display:flex; gap:8px; }
+.challenge-form-row .roast-select { flex:1; margin-bottom:0; }
+.challenges-list { }
+.challenge-card { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:12px; margin-bottom:8px; }
+.challenge-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.challenge-label { font-size:13px; font-weight:600; color:#e0dcd4; }
+.challenge-winner-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* Trip History */
+.history-modal { max-height:85vh; overflow-y:auto; }
 
 /* Back button */
 .back-btn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:#555; font-size:13px; font-weight:600; cursor:pointer; padding:6px 10px 6px 0; border-radius:6px; transition:color 0.2s; margin-bottom:8px; }
