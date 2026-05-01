@@ -494,7 +494,7 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
         : [{ type: "text", text: buildRoastPrompt(hole, intensity, worstPlayer, worstProfile, playerScores, worstShot, false, courseInfo) }]
     }];
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages }),
       });
@@ -657,7 +657,7 @@ function PropBetsScreen({ players, onDone }) {
 Make each bet about a specific player doing something hilarious or embarrassing. Format as JSON array: [{"bet": "...", "player": "PlayerName"}]. Only JSON, no other text.`;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
@@ -738,7 +738,7 @@ Traits: ${worstProfile?.traits || "none"}
 ${situation ? `Situation: ${situation}` : ""}
 2-3 sentences max. No intro. Pure roast energy. Go.`;
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
@@ -866,7 +866,7 @@ Write a Post-Round Roast Report:
 Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`;
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
@@ -1888,7 +1888,7 @@ function CourseSetupScreen({ onDone, onSkip, onBack }) {
     if (!courseName.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 300,
@@ -1971,7 +1971,7 @@ function PropBetsScreenV2({ players, onDone, onBack }) {
     const names = players.map(p => p.name).join(", ");
     const traits = players.map(p => `${p.name}: ${p.traits || "unknown"}`).join("; ");
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 400,
