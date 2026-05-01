@@ -6,6 +6,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.dnilly.shanked
+      groups:
+        - default
       vars:
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
