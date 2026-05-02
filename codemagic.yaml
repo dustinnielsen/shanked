@@ -16,10 +16,8 @@ workflows:
         script: npm install
       - name: Build Next.js static export
         script: npm run build
-      - name: Install Capacitor CLI
-        script: npm install -g @capacitor/cli
       - name: Capacitor sync
-        script: cap sync ios
+        script: npm exec -- cap sync ios
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
       - name: Build iOS
