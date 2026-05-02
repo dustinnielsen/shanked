@@ -496,7 +496,7 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages }),
+        body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 1000, messages }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -659,7 +659,7 @@ Make each bet about a specific player doing something hilarious or embarrassing.
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "[]";
@@ -740,7 +740,7 @@ ${situation ? `Situation: ${situation}` : ""}
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setRoast(data.content?.find(b => b.type === "text")?.text || "...");
@@ -868,7 +868,7 @@ Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setReport(data.content?.find(b => b.type === "text")?.text || "The AI retired.");
@@ -1891,7 +1891,7 @@ function CourseSetupScreen({ onDone, onSkip, onBack }) {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 300,
+          model: "claude-3-5-haiku-20241022", max_tokens: 300,
           messages: [{ role: "user", content: `What are the pars for each of the 18 holes at ${courseName}? Return ONLY a JSON array of 18 integers like [4,3,5,...]. No other text.` }]
         }),
       });
@@ -1974,7 +1974,7 @@ function PropBetsScreenV2({ players, onDone, onBack }) {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6", max_tokens: 400,
+          model: "claude-3-5-haiku-20241022", max_tokens: 400,
           messages: [{ role: "user", content: `Generate 5 funny prop bets for a casual golf round. Players: ${names}. Traits: ${traits}. Make them specific to the players. Return ONLY a JSON array of strings like ["bet1","bet2",...]. No other text.` }]
         }),
       });
@@ -2615,7 +2615,7 @@ function TripHistoryModal({ onClose, currentTrip, onSaveCurrent }) {
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=Russo+One&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-.app { min-height: 100vh; background: #0a0a0a; color: #f0ece4; font-family: 'DM Sans', sans-serif; display: flex; flex-direction: column; align-items: center; padding-bottom: 80px; }
+.app { min-height: 100vh; width: 100%; max-width: 100vw; overflow-x: hidden; background: #0a0a0a; color: #f0ece4; font-family: 'DM Sans', sans-serif; display: flex; flex-direction: column; align-items: center; padding-bottom: 80px; box-sizing: border-box; }
 .screen { width: 100%; max-width: 480px; padding: 24px 20px; animation: fadeUp 0.35s ease both; }
 @keyframes fadeUp { from { opacity:0; transform:translateY(16px);} to{opacity:1;transform:translateY(0);} }
 
