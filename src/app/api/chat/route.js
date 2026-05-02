@@ -15,6 +15,7 @@ export async function POST(request) {
     });
     const data = await response.json();
     if (!response.ok) {
+      console.error('Anthropic error:', JSON.stringify(data));
       return Response.json({ error: data.error?.message || `API error ${response.status}` }, { status: response.status });
     }
     return Response.json(data);
