@@ -17,7 +17,7 @@ workflows:
       - name: Build Next.js static export
         script: npm run build
       - name: Capacitor sync
-        script: ./node_modules/.bin/cap sync ios
+        script: node node_modules/@capacitor/cli/bin/cap sync ios
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
       - name: Build iOS
