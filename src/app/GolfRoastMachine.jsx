@@ -496,7 +496,7 @@ function RoastScreen({ players, hole, round, holeScores, worstPlayer, worstShot,
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1000, messages }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -659,7 +659,7 @@ Make each bet about a specific player doing something hilarious or embarrassing.
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "[]";
@@ -740,7 +740,7 @@ ${situation ? `Situation: ${situation}` : ""}
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setRoast(data.content?.find(b => b.type === "text")?.text || "...");
@@ -868,7 +868,7 @@ Like a drunk caddy who knows everyone. No markdown headers, flowing funny text.`
     try {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setReport(data.content?.find(b => b.type === "text")?.text || "The AI retired.");
@@ -1891,7 +1891,7 @@ function CourseSetupScreen({ onDone, onSkip, onBack }) {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 300,
+          model: "claude-sonnet-4-5", max_tokens: 300,
           messages: [{ role: "user", content: `What are the pars for each of the 18 holes at ${courseName}? Return ONLY a JSON array of 18 integers like [4,3,5,...]. No other text.` }]
         }),
       });
@@ -1974,7 +1974,7 @@ function PropBetsScreenV2({ players, onDone, onBack }) {
       const res = await fetch("https://shanked.vercel.app/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 400,
+          model: "claude-sonnet-4-5", max_tokens: 400,
           messages: [{ role: "user", content: `Generate 5 funny prop bets for a casual golf round. Players: ${names}. Traits: ${traits}. Make them specific to the players. Return ONLY a JSON array of strings like ["bet1","bet2",...]. No other text.` }]
         }),
       });
